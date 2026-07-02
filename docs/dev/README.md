@@ -35,6 +35,7 @@
 | FSP統合 | `fsp-integration.md` | 完了（外側リポジトリ asp3_fsp＝A案submodule化・RASC6.2.0+ATfE clang。EK-RA6M5/EK-RA8M2 実機動作確認済み＝RA8M2はM85 exc_return整列・SCI起動化け・GPT HRTラップの3件を修正のうえ95秒連続走行で警告0） |
 | STM32 HAL統合 | `stm32-integration.md` | 完了（外側リポジトリ asp3_stm32cube＝A案submodule化＋非TECS+Python cfg化。NUCLEO-H563ZI/H533RE 実機検証済み＝test_porting 6/6・testexec。H533REのVTOR整列が重要知見） |
 | NXP MCUXpresso SDK統合 | `nxp-integration.md` | 完了（Phase A＝mimxrt685evk・Phase B＝asp3_mcuxsdk とも実機検証済＝testexec全件33/36 PASS。asp3_mcuxsdk側のCI・移植skillも消し込み済） |
+| ESP-IDF統合 | `esp-idf-integration.md` | 計画中（ESP32-C3。Phase A＝ベアメタルターゲット→Phase B＝外側リポジトリ asp3_esp_idf でesp-hal統合＋Wi-Fi os_adapter shim） |
 | skillパッケージ | `skill-package.md` | 完了（移植ガイドskillとして各SDKリポジトリ内に実装＝asp3_fsp/asp3_stm32cube。picoは不要と判断。当初計画からの変更点は本ファイル参照） |
 | メモリ保護 | `memory-protection.md` | 計画中（arm_m 静的MPU スタックガード。PSPLIMは実装済み） |
 | SAFEG（ARMv8-M TrustZone） | `safeg.md` | 完了（SafeG-M デュアルOS。M1〜M4＋Phase B。an505(QEMU)/pico2/mimxrt685evk。既定OFF＝素ASP3不変） |

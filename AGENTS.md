@@ -47,6 +47,7 @@ TOPPERS/ASP3カーネルを上流追従しながら、各社SDK（Raspberry Pi P
 | FSP統合 | Renesas FSPと協調動作（第一目的の第2弾）。**完了**（2026-06-12）：外側リポジトリ(asp3_fsp)で管理＝`ASP3_TARGET_DIR`。EK-RA6M5/EK-RA8M2 実機検証済み。ツールチェーンはLLVM-ARM/clang・RASC生成依存 | 中 |
 | STM32 HAL統合 | STM32Cube HALと協調動作（第一目的の第3弾）。**完了**（2026-06-12）：外側リポジトリ(asp3_stm32cube)で管理＝`ASP3_TARGET_DIR`。旧世代asp3(TECS/Ruby)から非TECS+Python cfg化を実施。NUCLEO-H563ZI/H533RE 実機検証済み（test_porting 6/6・testexec）。toolchainはarm-none-eabi gcc・CubeMX生成依存 | 中 |
 | NXP MCUXpresso SDK統合 | NXP MCUXpresso SDKと協調動作（第一目的の第4弾・EVK-MIMXRT685/CM33）。Phase A＝ベアメタルターゲットをasp3_core本体へ（genuine 3.7.0移植を非TECS+Python cfg変換・SDK不要・CIビルド可）→Phase B＝外側リポジトリでSDK統合 | 中 |
+| ESP-IDF統合 | Espressif ESP-IDFと協調動作（第一目的の第5弾・ESP32-C3/RV32IMC）。ESP-IDFはFreeRTOS前提のためesp-hal-3rdparty方式（Zephyr/NuttXの前例）で下層hal/soc層とのみ協調。Phase A＝ベアメタルESP32-C3ターゲットをasp3_core本体へ（Espressif QEMU fork対応・CIビルド可）→Phase B＝外側リポジトリ(asp3_esp_idf)でesp-hal統合＋Wi-Fi os_adapter shim。経緯は`docs/dev/esp-idf-integration.md` | 中 |
 | skillパッケージ | 移植ガイドskill。**完了**（2026-06-12）：各SDKリポジトリ内 `.claude/skills/` に実装（asp3_fsp=porting-asp3-to-renesas-ra・asp3_stm32cube=porting-asp3-to-stm32。picoは不要と判断） | 中 |
 | メモリ保護 | Zephyr相当のセーフティネット型保護（コードRO・SRAM実行禁止・NULL検出．スタック下限保護=PSPLIMは実装済み）。MPU(arm_m)/MMU(arm64)/PMP(riscv)で静的設定・kernel/無改変 | 中 |
 | SAFEG（ARMv8-M TrustZone） | 上流SafeG（A-profileデュアルOS）のCortex-M（TrustZone-M）版を arm_m 共通へ取り込み。ASP3をセキュア側に置きNS側を隔離。既定OFF（`ENABLE_SAFEG_M`）で素ASP3不変・kernel/無改変（`#ifdef TOPPERS_SAFEG_M`ガード）。an505(QEMU)/pico2/mimxrt685evk。経緯は`docs/dev/safeg.md` | 中 |
