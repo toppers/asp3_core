@@ -48,6 +48,7 @@
 | `target/mps2_an505_gcc/` | 新規追加 | QEMU Cortex-M33ターゲット | （上流に存在せず・衝突なし） | target(NEW) | — |
 | `target/mps2_an386_gcc/` | 新規追加 | QEMU Cortex-M4ターゲット（ARMv7-M・非TZ・FPv4-SP．レガシーCMSDK系＝`hw/arm/mps2.c`．経緯は`docs/dev/mps2-an386.md`） | （上流に存在せず・衝突なし） | target(NEW) | — |
 | `arch/riscv_gcc/rp2350/`・`target/pico2_riscv_gcc/` | 新規追加 | RP2350 RISC-V（Hazard3）＝SDK非依存ベアメタル移植（Xh3irq・RISC-V IMAGE_DEF．経緯は`docs/dev/pico2-riscv.md`．RP2350.h/rp2350_uart等はarm_m_gcc/rp2350をパス参照で共有） | （上流に存在せず・衝突なし） | arch/target(NEW) | — |
+| `arch/riscv_gcc/esp32c3/`・`target/esp32c3_gcc/` | 新規追加 | ESP32-C3（RV32IMC）＝SDK（ESP-IDF）非依存ベアメタル移植（割込みマトリクス＝INTMTX・Direct Boot・SYSTIMER．QEMUはEspressif fork．経緯は`docs/dev/esp-idf-integration.md`） | （上流に存在せず・衝突なし） | arch/target(NEW) | — |
 | `target/stm32mp257f_dk_arm64_gcc/` | 新規追加 | asp3_stm32cube（旧 stm32_vscode_asp）から移植 | （上流に存在せず・衝突なし） | target(NEW) | — |
 | `arch/arm64_gcc/zynqmp/`・`target/zcu102_arm64_gcc/` | 新規追加 | QEMU(xlnx-zcu102)用ARMv8-Aターゲット（FMP3のZynqMP移植をASP3変換．経緯は`docs/dev/qemu-target-a64.md`） | （上流に存在せず・衝突なし．FMP3側の更新は手動反映） | arch/target(NEW) | — |
 | `target/polarfire_soc_kit_gcc/` | 新規追加 | QEMU(microchip-icicle-kit)用RISC-Vターゲット（FMP3のPolarFire SoC Kit移植をASP3変換．経緯は`docs/dev/qemu-target-riscv.md`） | （上流に存在せず・衝突なし．FMP3側の更新は手動反映） | target(NEW) | — |

@@ -17,6 +17,7 @@
 | RISC-V コンテキストスイッチ | `riscv_gcc/common` | `core_support.S` | mret/csr |
 | RISC-V トラップエントリ | `riscv_gcc/common` | `core_support.S`・`polarfire_soc/chip_support.S` | mtvecベクタ＋mcause判定 |
 | RISC-V PLIC割込み制御 | `riscv_gcc/common` | `plic_kernel_impl.[ch]`・`polarfire_soc/chip_support.S` | claim/complete・閾値マスク |
+| ESP32-C3割込みマトリクス制御 | `riscv_gcc/esp32c3` | `intmtx_kernel_impl.h`・`chip_support.S` | ソースMAP・THRESHソフト昇格（ネスト）・FROM_CPUでras_int |
 | RISC-V Machine Timer | `riscv_gcc/common` | `mtimer.[ch]` | CLINT mtime/mtimecmp（MTIはローカル割込み） |
 
 ---
@@ -31,6 +32,8 @@
 | QEMUクリーン終了 | `syssvc/qemu_exit.c` | — | SYS_EXIT (0x18) |
 | Pico SDK統合（タイマ/UART/ブート） | 外部 `asp3_pico_sdk` リポジトリ | （SDK統合版・`ASP3_TARGET_DIR`方式） | add_repeating_timer_us / uart_putc_raw / stdio_init |
 | RP2350 RISC-V起動（IMAGE_DEF） | `pico2_riscv_gcc` | `image_def.S` | RISC-V EXE（0x1101）＋ENTRY_POINT item |
+| ESP32-C3起動（Direct Boot） | `esp32c3_gcc` | `flash_header.S`・`esp32c3.ld` | マジック0xAEDB041D×2・flash+8エントリ・IROM/DROM二重マップXIP |
+| SYSTIMERによるHRT | `esp32c3_gcc` | `target_timer.[ch]` | 16MHz固定・52bit・oneshotコンパレータ・FROM_CPU多重マップで割込み強制 |
 | Hazard3 Xh3irq割込み制御 | `arch/riscv_gcc/rp2350` | `xh3irq_kernel_impl.h`・`chip_support.S` | meinext claim・優先度スタックをソフトpop |
 | RV32実証（XLEN抽象） | `arch/riscv_gcc/rp2350` | `chip.cmake`・`common/core_kernel.h` | rv32imac/ilp32・STK_T分岐 |
 | Xh3irq割込み状態（OS-awareness） | `arch/riscv_gcc/rp2350` | `chip_os_awareness.py` | 窓方式CSRをexec_progbufで読出し |
@@ -45,6 +48,7 @@
 | QEMU AArch64ベアメタル実行 | `zcu102_arm64_gcc` | `target.cmake`・`target_kernel_impl.c` | xlnx-zcu102,secure=on／SYS_EXIT終了／glibc系ツールチェーン対策 |
 | MMUART（PolarFire SoC） | `arch/riscv_gcc/polarfire_soc` | `mmuart.[ch]`・`chip_serial.c` | 非TECS SIO（16550系） |
 | QEMU RISC-Vベアメタル実行 | `polarfire_soc_kit_gcc` | `target.cmake`・`target_kernel_impl.c` | microchip-icicle-kit／-bios none／ハートパーキング／SYS_EXIT終了 |
+| QEMU esp32c3実行（Espressif fork） | `esp32c3_gcc` | `target.cmake`・`run.cmake` | フラッシュイメージ（-drive if=mtd）起動・objcopyポストビルド・RV32セミホスティング終了 |
 | Flexcomm USART（i.MX RT600） | `arch/arm_m_gcc/imxrt600` | `imxrt600_usart.[ch]`・`chip_serial.c` | 非TECS SIO（FRG分周＋FIFOTRIG割込み） |
 | CTimerによるHRTタイマ | `mimxrt685evk_gcc` | `target_timer.c`・`target_timer.h` | 1MHzプリスケーラ＋MR0マッチ割込み（32bitアップカウンタ） |
 | XIP実行（FlexSPI設定ブロック） | `mimxrt685evk_gcc` | `flash_config.c`・`mimxrt685.ld`・`target_kernel.py` | `.flash_conf`@0x400・ベクタ9=イメージタイプ(bit14)・ベクタテーブル@0x1000 |

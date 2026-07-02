@@ -16,6 +16,7 @@
     "target/mimxrt685evk_gcc/presets.json",
     "target/pico2_arm_gcc/presets.json",
     "target/pico2_riscv_gcc/presets.json",
-    "target/polarfire_soc_kit_gcc/presets.json"
+    "target/polarfire_soc_kit_gcc/presets.json",
+    "target/esp32c3_gcc/presets.json"
   ]
 }

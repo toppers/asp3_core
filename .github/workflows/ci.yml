@@ -310,6 +310,70 @@ jobs:
           grep -q "# 6/6 passed" test_porting.log
 
   #
+  #  QEMU RV32IMC（esp32c3）：build → sample1スモーク → test_porting →
+  #  testexecスモーク
+  #  ※esp32c3マシンは上流QEMUに無いため，Espressif版QEMU（プレビルト）を
+  #    ジョブ内でダウンロードして使用する（Direct Bootのフラッシュ
+  #    イメージ起動．経緯は docs/dev/esp-idf-integration.md）
+  #
+  esp32c3-qemu:
+    name: QEMU esp32c3 (RV32IMC)
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
+      #  ランナーファイルに書けるようrootで実行する
+      options: --user root
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      QEMU_ESP: /opt/qemu-esp/bin/qemu-system-riscv32
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Espressif QEMU (esp32c3)
+        run: |
+          curl -fsSL -o /tmp/qemu-esp.tar.xz \
+            https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20260417/qemu-riscv32-softmmu-esp_develop_9.2.2_20260417-x86_64-linux-gnu.tar.xz
+          echo "547f03e04701a92cbb699f7f7d015adc1f5b5ef93cbb94c0dd9b7107e2d84e77 */tmp/qemu-esp.tar.xz" | sha256sum -c -
+          mkdir -p /opt/qemu-esp
+          tar -xJf /tmp/qemu-esp.tar.xz -C /opt/qemu-esp --strip-components=1
+          $QEMU_ESP --version
+      - name: Build (sample1)
+        run: |
+          cmake --preset esp32c3-qemu -B build/esp32c3-qemu
+          cmake --build build/esp32c3-qemu
+      - name: Smoke test (sample1)
+        run: |
+          scripts/ci/smoke_sample1.sh 60 $QEMU_ESP -M esp32c3 -nographic \
+            -semihosting \
+            -drive file=build/esp32c3-qemu/asp_flash.bin,if=mtd,format=raw
+      - name: Porting verification test (test_porting)
+        run: |
+          cmake --preset esp32c3-qemu -B build/test_porting-esp32c3 \
+            -DASP3_APPLDIR=test/porting -DASP3_APPLNAME=test_porting \
+            -DASP3_EXTRA_APP_C_FILES=test/porting/tap.c
+          cmake --build build/test_porting-esp32c3
+          timeout 60 $QEMU_ESP -M esp32c3 -nographic -semihosting \
+            -drive file=build/test_porting-esp32c3/asp_flash.bin,if=mtd,format=raw \
+            | tee test_porting.log || true
+          grep -q "# 6/6 passed" test_porting.log
+      - name: Smoke tests (testexec.py)
+        run: |
+          scripts/ci/run_testexec.py --options "--preset esp32c3-qemu" \
+            --run "timeout 60 $QEMU_ESP -M esp32c3 -nographic -semihosting \
+                   -drive file=asp_flash.bin,if=mtd,format=raw" \
+            --workdir build/testexec-esp32c3 \
+            task1 sem1 flg1 int1 tmevt1 hrt1
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: esp32c3-qemu-logs
+          path: build/testexec-esp32c3/testexec.log
+          if-no-files-found: ignore
+
+  #
   #  Raspberry Pi PICO2（実機ターゲット）：build only
   #
   pico2:

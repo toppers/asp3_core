@@ -107,32 +107,110 @@ SDK（ESP-IDF）非依存の自己完結ターゲット。QEMUでCIが回る形�
 
 ## 実施結果
 
-（未着手。Phase 0 の調査結果と各Phaseの完了時に記載）
+### Phase 0（調査）結果（2026-07-02〜03）
+
+1. **QEMU**：Espressif版QEMU 9.2.2（esp-develop-9.2.2-20260417・プレビルト）を
+   `~/TOPPERS/ASP3CORE/tools/qemu-esp/` に導入。esp32c3マシン・ROM
+   （esp32c3-rom.bin）同梱。フラッシュイメージ（`-drive file=...,if=mtd,format=raw`）
+   から起動する（`-kernel` ELF直ロード非対応）。
+2. **ブート方式＝Direct Boot採用を実証**：フラッシュ先頭マジック
+   （0xAEDB041D×2）＋flash+8エントリの最小バイナリがQEMU同梱ROMで起動する
+   ことをスパイクで確認。**二段ブートローダ・esptoolイメージ形式とも不要**
+   （esptoolは実機書込み時のみ必要）。
+3. **セミホスティング終了**：RV32では `a0=0x18(SYS_EXIT)`・`a1=0x20026` 直値で
+   QEMUが終了コード0で終了することを確認（RV64のパラメタブロック形式と異なる）。
+4. **HRTタイマ＝SYSTIMER採用**：16MHz固定（XTAL 40MHz÷2.5）・52bit・
+   μs=count/16の完全シフト変換。TIMG案は棄却（QEMUでの再現性とIDF実績を優先）。
+5. **参照資料**：`~/TOPPERS/ASP3CORE/ref-esp32c3/` にesp-idf（sparse checkout）・
+   esp32c3-direct-boot-example・レジスタ早見表 `HW_NOTES.md` を配置（リポジトリ外）。
+
+### Phase A（QEMU）結果（2026-07-03）
+
+ESP-IDF非依存の自己完結ターゲット `esp32c3_gcc`（プリセット `esp32c3-qemu`）を追加。
+
+**設計の要点**（他TOPPERS系RTOSでの同種移植の参考）：
+
+- **割込みコントローラ（INTMTX＝割込みマトリクス）**：Xh3irq（rp2350）と同じ
+  chip層契約（`irc_begin/end_int`・`trap_vector_table`）で3種目のRISC-V割込み
+  流儀を実装。vectoredモードで `mcause&0x1f`＝CPU割込み線番号＝ASP3のINTNO
+  （1〜31・ずらしなし）。優先度は1〜7（物理4bitだが公式規定は7まで）。
+  ハードウェアの優先度自動昇格が無いため，入口でTHRESHレジスタを「受付け
+  優先度+1」へソフト昇格・出口で復元（ESP-IDF vectors.Sと同じパターン）。
+- **ras_int／clr_int／prb_int**：C3はXh3irqのmeifa相当を持たないため，
+  ソフトウェアでアサートできるlevelソース**FROM_CPU_0〜3**を割込み線に
+  多重マップして実現。タイマ割込みの強制（過去時刻set_event・raise_event）
+  はFROM_CPU_0をSYSTIMERと同じ線に，テスト用INTNO1（=3）はFROM_CPU_1を割当て。
+  prb_intはFROM_CPUレジスタ読み返し＋ソース生ステータスで判定。
+- **Direct Bootリンカスクリプト**：フラッシュがIROM(0x42000000)/DROM(0x3C000000)
+  へ線形二重マップされるため「VMAオフセット＝フラッシュオフセット」を維持。
+  LMAはDROM基準（**cfg pass1がシンボルVMAでsrec(LMA)を引くため.rodataは
+  VMA==LMAが必須**）。マジック＋エントリ＋コードは単一.textセクションに
+  まとめ（セクション内はVMA/LMAオフセットが常に一致），空.data対策の番兵
+  LONG(0)を配置。.dataはstart.Sの既存機構でDROM→RAMコピー。
+- **WDT無効化**：リセット後デフォルトで有効なMWDT0/1・RTC WDT・スーパーWDTを
+  hardware_init_hookで無効化（しないと数秒でリブート）。
+- **QEMU固有の知見**：
+  - QEMUのesp32c3モデルは割込みを**RISC-V標準のmip/mie経由**で配送するため，
+    mieを全ビット許可する必要がある（実機のINTCはmieを経由しない＝ESP-IDFは
+    mieを触らないが，全許可は実機でも無害）。
+  - INTR_STATUSレジスタ（ソース生ステータス）は未実装（読出し0）。
+    prb_intのFROM_CPUレジスタ読み返しが実効的な判定になる。
+- **UART0**：ROMブートローダの115200bps設定を継承（初期化コード無し）。
+  SIOドライバはFIFOカウンタ（STATUS）とINT_ENA/INT_CLRで実装。
 
 ### 変更したファイル
 
 | ファイル | 変更内容概要 |
 |---|---|
-|  |  |
+| `CMakePresets.json` | `target/esp32c3_gcc/presets.json` のinclude追加 |
+| `AGENTS.md` | §4にQEMU esp32c3のビルド・実行コマンド追加 |
+| `.github/workflows/ci.yml` | esp32c3-qemuジョブ追加（Espressif QEMUをジョブ内DL・sample1スモーク・test_porting・testexecスモーク） |
+| `DIVERGENCE_MAP.md`／`docs/porting/IMPL_INDEX.md`／`docs/building.md`／`docs/dev/README.md` | esp32c3の台帳・索引追記 |
 
 ### 追加したファイル
 
+- `arch/riscv_gcc/esp32c3/`（チップ依存部）：
+  `esp32c3.h`（MMIO定義）・`intmtx_kernel_impl.h`（INTMTXドライバ）・
+  `chip_kernel_impl.[ch]`・`chip_support.S`（irc_*・trap_vector_table）・
+  `chip.cmake`・`chip_kernel.py`・`esp32c3_uart.[ch]`／`chip_serial.[ch]`／
+  `chip_serial.cfg`（非TECS SIO）・chip_*ボイラープレート（rename/sil/stddef/
+  os_awareness等．rp2350雛形）
+- `target/esp32c3_gcc/`（ターゲット依存部）：
+  `flash_header.S`（Direct Bootマジック＋エントリ）・`esp32c3.ld`・
+  `target_timer.[ch]`（SYSTIMER）・`target_kernel_impl.[ch]`（WDT無効化・
+  ソースルーティング・セミホスティング終了）・`target.cmake`／`run.cmake`
+  （フラッシュイメージ生成・QEMU run）・`presets.json`・cfg一式・
+  target_*ボイラープレート（pico2_riscv雛形）
+
 ### 削除したファイル
+
+なし
 
 ### Git情報
 
-- ベースコミット：
-- 関連コミット範囲：
+- ベースコミット：`9e62b6c`（docs(dev): add ESP-IDF integration plan）
+- ブランチ：`feat/esp32c3`
 - ファイルリスト再現コマンド例：`git diff --stat upstream main -- arch/riscv_gcc/esp32c3 target/esp32c3_gcc`
 
 ### 検証結果
 
 | テスト | 実施 | 結果 |
 |---|---|---|
-| POSIX | − |  |
-| QEMU (esp32c3) | − |  |
-| 実機 (ESP32-C3-DevKitC-02) | − |  |
+| POSIX | ○ | 回帰なし（linuxプリセット・ctest） |
+| QEMU (esp32c3)・sample1 | ○ | バナー＋task実行を確認 |
+| QEMU (esp32c3)・test_porting | ○ | **6/6 passed** |
+| QEMU (esp32c3)・testexec（36件） | ○ | **35/36 PASS**（cpuexc10=対象外SKIP扱いPASS・**dlynseのみNG＝QEMUが実時間を再現しないため計測不能の想定NG**（実機較正専用・他QEMUターゲットもCI対象外）） |
+| 実機 (ESP32-C3-DevKitC-02) | − | 未実施（今後．asp_flash.binを`esptool write_flash 0x0`で書込み予定） |
 
 ### DIVERGENCE_MAP との関連
 
-（kernel/ 等PRISTINE領域への変更は想定なし。発生した場合に記載）
+kernel/・include/・arch/riscv_gcc/common/ 等のPRISTINE/EXTENDED領域への変更なし
+（新規追加のみ）。DIVERGENCE_MAP.mdに `arch/riscv_gcc/esp32c3/`・
+`target/esp32c3_gcc/` をNEWとして追記済み。
+
+### 残作業（Phase A完了までに）
+
+- 実機ESP32-C3-DevKitでのtest_porting／testexec／dlynse較正（SIL_DLY_TIM1/2・
+  CORE_CLK_MHZの実測）
+- OS Awareness（osdebug）の動作確認（chip_os_awareness.pyはMMIO読出しで実装済み・未検証）
+- devcontainerへのEspressif QEMU追加（現状CIはジョブ内ダウンロード）

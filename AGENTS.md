@@ -154,6 +154,12 @@ cmake --preset polarfire_soc_kit-qemu -B build/polarfire_soc_kit-qemu && cmake -
 timeout 30 qemu-system-riscv64 -machine microchip-icicle-kit -nographic \
   -semihosting-config enable=on,target=native -bios none -kernel build/polarfire_soc_kit-qemu/asp.elf
 
+# QEMU RISC-V RV32IMC（esp32c3・ハードなし・Espressif版QEMUが必要）
+# ELFではなくフラッシュイメージ（asp_flash.bin＝Direct Boot形式・ポストビルド生成）から起動する
+cmake --preset esp32c3-qemu -B build/esp32c3-qemu && cmake --build build/esp32c3-qemu
+timeout 30 qemu-system-riscv32 -M esp32c3 -nographic -semihosting \
+  -drive file=build/esp32c3-qemu/asp_flash.bin,if=mtd,format=raw
+
 # Raspberry Pi PICO2 (Cortex-M33 / 実機)
 cmake --preset pico2_arm -B build/pico2_arm && cmake --build build/pico2_arm
 

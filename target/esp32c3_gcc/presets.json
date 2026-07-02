@@ -1,0 +1,32 @@
+{
+  "version": 4,
+  "include": [
+    "../../cmake/presets-base.json"
+  ],
+  "configurePresets": [
+    {
+      "name": "esp32c3-qemu",
+      "inherits": "_base",
+      "displayName": "ESP32-C3 / QEMU (Espressif fork)",
+      "description": "QEMU実行用（Espressif版QEMUがPATHにない場合は -DQEMU_SYSTEM_RISCV32_ESP=... を付与）",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-riscv64.cmake",
+      "cacheVariables": {
+        "ASP3_TARGET": "esp32c3_gcc",
+        "ESP32C3_QEMU": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "esp32c3-qemu",
+      "configurePreset": "esp32c3-qemu"
+    },
+    {
+      "name": "run-esp32c3-qemu",
+      "configurePreset": "esp32c3-qemu",
+      "targets": [
+        "run"
+      ]
+    }
+  ]
+}
