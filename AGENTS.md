@@ -404,5 +404,6 @@ arch/target/アプリ/移植skill を外側で管理**する構成（`ASP3_TARGE
 | [asp3_fsp](https://github.com/exshonda/asp3_fsp) | Renesas FSP統合（RA・LLVM/clang＋RASC）＋移植skill | EK-RA6M5／EK-RA8M2 |
 | [asp3_stm32cube](https://github.com/exshonda/asp3_stm32cube)（旧 stm32_vscode_asp） | STM32Cube HAL統合（STM32H5・CubeMX）＋移植skill。STM32MP257/A35ターゲットの移植元でもある | NUCLEO-H563ZI／H533RE |
 | [asp3_mcuxsdk](https://github.com/exshonda/asp3_mcuxsdk) | NXP MCUXpresso SDK統合（i.MX RT685）。**Phase A・Phase B（SDK統合）とも完了・実機検証済**（`docs/dev/nxp-integration.md`） | EVK-MIMXRT685（Phase A：test_porting 6/6・testexec 33/35＝cpuexc1/4は arm_m 既知FAIL・dlynse較正・OS Awareness／Phase B：test_porting 6/6・testexec 33/36 PASS＝cpuexc1/4既知FAIL） |
+| asp3_esp_idf（GitHub作成待ち・ローカル） | ESP-IDF統合（ESP32-C3）。esp-hal-3rdparty方式＝FreeRTOS非依存のhal/soc層のみ使用。B-0/B-1完了（LL層コンソール・タイマ）・B-2（Wi-Fi os_adapter shim）は未着手（`docs/dev/esp-idf-integration.md`） | ESP32-C3実機（B-1：test_porting 6/6・testexec 36/36） |
 
 > asp3_core 側を変更したら、各リポジトリの submodule を bump して追従させること。

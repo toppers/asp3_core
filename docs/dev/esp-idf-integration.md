@@ -254,10 +254,43 @@ esptool書込み・`-DESP32C3_PORT=`でポート指定）も追加。
 | testexec（36件） | **36/36 PASS**（cpuexc10=対象外SKIP扱いPASS・dlynse含む） |
 | QEMU回帰 | test_porting 6/6維持（クロック切替・コンソール変更後） |
 
+### Phase B-0／B-1（外側リポジトリ・esp-hal統合）結果（2026-07-03）
+
+外側リポジトリ **asp3_esp_idf**（ローカル：`~/TOPPERS/ASP3CORE/asp3_esp_idf`．
+GitHubリポジトリは作成待ち）を作成し，esp-hal-3rdparty統合（B-1）まで完了。
+
+- **B-0（骨格）**：asp3_core submodule（feat/esp32c3）＋
+  `asp3/target/esp32c3_espidf/`（外部ターゲット規約）＋パス解決ヘルパ。
+  **ビルド方式はpico-sdk型**（asp3_core本体のCMakeを`ASP3_TARGET_DIR`で
+  駆動）——ESP32-C3はASP3自前のDirect Bootで起動するため，mcuxsdk型
+  （SDKスタートアップ＋main→sta_ker）の協調が不要なことによる。
+- **B-1（esp-hal統合）**：
+  - submodule `hal/`＝espressif/esp-hal-3rdparty本家を**NuttX検証済み
+    コミットSHA（release/master.c系）に固定**（Zephyr方式＝フォーク維持
+    ではなくNuttX方式。ASP3固有スタブは外側リポジトリに置きhal/無改変）
+  - Kconfig非依存：sdkconfig.hはesp-hal同梱のNuttX用静的スタブを流用し，
+    nuttx/config.h・assert.h・string.hは最小スタブ（hal_stub/）で供給
+    （riscv64-unknown-elf-gccにnewlibヘッダが無い環境でも成立）
+  - **LL層（static inlineのレジスタ薄層・RTOS非依存）でUSB Serial/JTAG
+    コンソールとSYSTIMERタイマを再実装**し統合を実証（公開シンボル同一の
+    ためasp3_core無改変・target.cmakeのREMOVE/APPENDで差替え）。
+    ペリフェラル構造体はesp-halのesp32c3.peripherals.ldをINCLUDE
+  - Wi-Fi blob submodule（esp32-wifi-lib≈2GB）はB-2までinitしない
+  - 設計記録は asp3_esp_idf の `docs/hal-integration.md`
+- **検証**：QEMU test_porting 6/6・実機test_porting 6/6・
+  **実機testexec 36/36 PASS**（LL版ドライバ・外側リポジトリ経由）
+
 ### 残作業
 
+- GitHubリポジトリ exshonda/asp3_esp_idf の作成とpush（gh CLI失効のため
+  リポジトリ作成はユーザー操作待ち）
+- **Phase B-2：Wi-Fi os_adapter shim**（本丸）。NuttXの
+  `arch/risc-v/src/esp32c3/esp_wifi_adapter.c`（2991行・osi_funcs約123
+  エントリ）を設計テンプレートに，ASP3のタスク/セマフォ/データキュー/
+  アラームで書き起こす。blobのmalloc要求（4系統）はカーネル外の固定長
+  メモリプールベースの簡易ヒープでラップ（禁則②回避）。スコープは
+  init〜scan〜AP接続まで
 - OS Awareness（osdebug）の実機動作確認（chip_os_awareness.pyはMMIO
   読出しで実装済み・未検証。デバッガ接続はOpenOCD-esp32＝Espressif
   fork版OpenOCDが必要）
 - devcontainerへのEspressif QEMU追加（現状CIはジョブ内ダウンロード）
-- Phase B（外側リポジトリasp3_esp_idf＝esp-hal統合＋Wi-Fi os_adapter shim）
