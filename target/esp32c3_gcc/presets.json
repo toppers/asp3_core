@@ -14,6 +14,15 @@
         "ASP3_TARGET": "esp32c3_gcc",
         "ESP32C3_QEMU": "ON"
       }
+    },
+    {
+      "name": "esp32c3",
+      "inherits": "esp32c3-qemu",
+      "displayName": "ESP32-C3 (real board, USB Serial/JTAG console)",
+      "description": "実機用（コンソール=USB Serial/JTAG．書込みはrun=esptool．ポートは -DESP32C3_PORT=... で指定）",
+      "cacheVariables": {
+        "ESP32C3_QEMU": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -24,6 +33,17 @@
     {
       "name": "run-esp32c3-qemu",
       "configurePreset": "esp32c3-qemu",
+      "targets": [
+        "run"
+      ]
+    },
+    {
+      "name": "esp32c3",
+      "configurePreset": "esp32c3"
+    },
+    {
+      "name": "run-esp32c3",
+      "configurePreset": "esp32c3",
       "targets": [
         "run"
       ]

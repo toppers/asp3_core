@@ -40,6 +40,19 @@ list(APPEND ASP3_INCLUDE_DIRS
 option(ESP32C3_QEMU "Build for QEMU esp32c3 (OFF: real ESP32-C3 board)" ON)
 
 #
+#  コンソールの選択（chip.cmake参照）．既定はQEMU=UART0・実機=USB
+#  Serial/JTAG（UARTブリッジを持たないネイティブUSBボードを想定．
+#  UART配線のあるボードでは -DESP32C3_CONSOLE=uart0 を指定する）．
+#
+if(ESP32C3_QEMU)
+    set(_esp32c3_console_default uart0)
+else()
+    set(_esp32c3_console_default usbjtag)
+endif()
+set(ESP32C3_CONSOLE ${_esp32c3_console_default}
+    CACHE STRING "Console device: uart0 or usbjtag")
+
+#
 #  コンパイル定義
 #
 #  USE_TIM_AS_HRT：高分解能タイマにSYSTIMERを使用（Machine Timer不使用）
@@ -92,6 +105,21 @@ if(ESP32C3_QEMU)
         ${QEMU_SYSTEM_RISCV32_ESP} -M esp32c3 -nographic
         -drive file=${CMAKE_BINARY_DIR}/asp_flash.bin,if=mtd,format=raw
         -semihosting
+    )
+else()
+    #
+    #  実機への書込み（cmake --build <dir> --target run）．
+    #  同じasp_flash.bin（Direct Boot形式）をesptoolでフラッシュ先頭へ
+    #  書き込む．コンソールは書込みと同じUSBポート（USB Serial/JTAG＝
+    #  /dev/ttyACM*）に出る（ESP32C3_CONSOLE=usbjtag時）．
+    #
+    set(ESP32C3_ESPTOOL esptool
+        CACHE STRING "Path to esptool")
+    set(ESP32C3_PORT /dev/ttyACM0
+        CACHE STRING "Serial port of the ESP32-C3 board")
+    set(ASP3_RUN_COMMAND
+        ${ESP32C3_ESPTOOL} --chip esp32c3 --port ${ESP32C3_PORT}
+        write-flash 0x0 ${CMAKE_BINARY_DIR}/asp_flash.bin
     )
 endif()
 

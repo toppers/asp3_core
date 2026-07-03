@@ -104,3 +104,28 @@ gh run view $RUN --repo exshonda/asp3_core --log-failed     # 失敗ログ
 | `.ld`を編集しても反映されない | `-Wl,-T`はリンク依存にならない | `LINK_DEPENDS`にldを登録（CMakeLists.txt） |
 | pico2_riscv で割込み有効時にハング（`r`キー等） | Hazard3はMEIトラップ入口で優先度スタックをpushしmretでpop。ASP3はmret非経由のディスパッチ経路があり不整合 | popをソフトで一本化（irc_end_int）。MRETEIRQで戻すのは不可 |
 | polarfire QEMU が無出力（実機接続PC） | QEMU 8.2.2 は icicle-kit の `-bios none` 直Mモードブート非対応（QEMU 10.1+必要） | CI（ピン留めコンテナ・QEMU 10.2）で確認 |
+
+## ESP32-C3 実機（esp32c3プリセット）
+
+ネイティブUSB接続（USB Serial/JTAG＝303a:1001・/dev/ttyACM*）のボード用。
+コンソールも同じUSBポートに出る（`ESP32C3_CONSOLE=usbjtag`既定）。
+
+```bash
+# ビルド（実機用．ポートは環境に合わせる）
+cmake --preset esp32c3 -B build/esp32c3 -DESP32C3_PORT=/dev/ttyACM1
+cmake --build build/esp32c3            # asp_flash.bin（Direct Boot形式）生成
+cmake --build build/esp32c3 --target run   # esptoolで書込み
+
+# テスト一括（testexec）：ボードランナがesptool書込み→RTSリセット→キャプチャ
+ESP32C3_TTY=/dev/ttyACM1 ESPTOOL=<esptoolのパス> scripts/ci/run_testexec.py \
+  --options "--preset esp32c3" \
+  --run "ESP32C3_TTY=/dev/ttyACM1 ESPTOOL=<esptoolのパス> python3 $(pwd)/scripts/ci/run_board_esp32c3.py 90" \
+  --workdir build/testexec-esp32c3-hw <テスト名>...
+```
+
+- **esptoolが`Connecting...`のままの個体はBOOT押下+RESETで手動ダウンロードモード**
+  （ボードにより自動リセット非対応）。
+- 出力キャプチャは**ポートを開いたままpyserialのRTSでリセット**する
+  （esptool終了時リセット任せでは先頭を取りこぼす＝run_board_esp32c3.py方式）。
+- 実機はmie CSR非実装・QEMUはmie必須（正反対）等の移植知見は
+  `docs/dev/esp-idf-integration.md` 実施結果を参照。

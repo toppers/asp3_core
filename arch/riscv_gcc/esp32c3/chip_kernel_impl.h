@@ -41,6 +41,15 @@
 #define TOPPERS_BOOT_HARTID    0
 
 /*
+ *  実機のESP32-C3はmie/mip CSRを実装しない（アクセスすると不正命令
+ *  例外）ため，共通部start.Sでのクリアを抑止する．
+ *  QEMUのesp32c3モデルはmieを実装しており（かつmie経由で割込みを
+ *  配送するため全許可が必要＝chip_initialize参照），実機とQEMUで
+ *  mieの扱いが正反対になる点に注意．
+ */
+#define TOPPERS_OMIT_MIE_INIT
+
+/*
  *  デフォルトの非タスクコンテキスト用のスタック領域の定義
  */
 #ifndef DEFAULT_ISTKSZ

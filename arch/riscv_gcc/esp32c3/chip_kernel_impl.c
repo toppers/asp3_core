@@ -113,17 +113,21 @@ chip_initialize(void)
 	 */
 	intmtx_initialize();
 
+#ifdef TOPPERS_USE_QEMU
 	/*
-	 *  mieのCPU割込み線ビット（1〜31）をすべて許可する．
+	 *  mieのCPU割込み線ビット（1〜31）をすべて許可する（QEMUのみ）．
 	 *
-	 *  実機のESP32-C3では割込みの許可・優先度制御は割込みマトリクス
-	 *  側で行われmieは実質使用されない（ESP-IDFもmieを設定しない）が，
 	 *  QEMUのesp32c3モデルはRISC-V標準のmip/mie経由で割込みを届ける
 	 *  ため，mieのビットが立っていないと割込みが配送されない．
 	 *  個別の許可・マスクはINTMTX（ENABLE／THRESH）で行うため，mieは
 	 *  常時全許可でよい．
+	 *  実機のESP32-C3はmie CSR自体を実装せず（アクセスすると不正命令
+	 *  例外＝実機ブリングアップで確認），割込みはINTMTXからmcauseへ
+	 *  直接届くため，mieには一切触れない（TOPPERS_OMIT_MIE_INITも
+	 *  定義している．chip_kernel_impl.h参照）．
 	 */
 	Asm("csrw mie, %0" : : "r"(~0U));
+#endif /* TOPPERS_USE_QEMU */
 
 	/*
 	 *  コア依存の初期化

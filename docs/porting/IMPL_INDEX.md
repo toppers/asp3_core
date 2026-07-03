@@ -49,6 +49,8 @@
 | MMUART（PolarFire SoC） | `arch/riscv_gcc/polarfire_soc` | `mmuart.[ch]`・`chip_serial.c` | 非TECS SIO（16550系） |
 | QEMU RISC-Vベアメタル実行 | `polarfire_soc_kit_gcc` | `target.cmake`・`target_kernel_impl.c` | microchip-icicle-kit／-bios none／ハートパーキング／SYS_EXIT終了 |
 | QEMU esp32c3実行（Espressif fork） | `esp32c3_gcc` | `target.cmake`・`run.cmake` | フラッシュイメージ（-drive if=mtd）起動・objcopyポストビルド・RV32セミホスティング終了 |
+| USB Serial/JTAGコンソール | `riscv_gcc/esp32c3` | `esp32c3_usbjtag.[ch]`・`chip_serial.c` | ネイティブUSBボード用SIO（/dev/ttyACM*直結・ホスト未接続時は出力破棄） |
+| ESP32-C3実機テストランナ | `scripts/ci` | `run_board_esp32c3.py` | esptool書込み→RTSリセット→マーカ待ちキャプチャ（pyserial） |
 | Flexcomm USART（i.MX RT600） | `arch/arm_m_gcc/imxrt600` | `imxrt600_usart.[ch]`・`chip_serial.c` | 非TECS SIO（FRG分周＋FIFOTRIG割込み） |
 | CTimerによるHRTタイマ | `mimxrt685evk_gcc` | `target_timer.c`・`target_timer.h` | 1MHzプリスケーラ＋MR0マッチ割込み（32bitアップカウンタ） |
 | XIP実行（FlexSPI設定ブロック） | `mimxrt685evk_gcc` | `flash_config.c`・`mimxrt685.ld`・`target_kernel.py` | `.flash_conf`@0x400・ベクタ9=イメージタイプ(bit14)・ベクタテーブル@0x1000 |

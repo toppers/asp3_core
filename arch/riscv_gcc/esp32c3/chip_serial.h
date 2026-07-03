@@ -18,12 +18,22 @@
  *
  *  arch/arm_m_gcc/rp2350/chip_serial.h からの流用．UART実体をRP2350
  *  UART(PL011系)からESP32-C3 UARTに置換．
+ *
+ *  コンソールの実体はコンパイル時に選択する（ESP32C3_CONSOLE＝
+ *  chip.cmake参照）：
+ *    - UART0（既定・QEMU）
+ *    - USB Serial/JTAG（TOPPERS_ESP32C3_CONSOLE_USBJTAG定義時．
+ *      UARTブリッジを持たないネイティブUSBボード用）
  */
 
 #ifndef TOPPERS_CHIP_SERIAL_H
 #define TOPPERS_CHIP_SERIAL_H
 
+#ifdef TOPPERS_ESP32C3_CONSOLE_USBJTAG
+#include "esp32c3_usbjtag.h"
+#else /* TOPPERS_ESP32C3_CONSOLE_USBJTAG */
 #include "esp32c3_uart.h"
+#endif /* TOPPERS_ESP32C3_CONSOLE_USBJTAG */
 
 #ifndef TOPPERS_MACRO_ONLY
 

@@ -210,7 +210,7 @@ python3 ../test_cfg/testcfg.py all
 | polarfire_soc_kit_gcc | polarfire_soc_kit／**polarfire_soc_kit-qemu** | 実機（実行手段は今後整備）／QEMU（run）．qemu-system-riscv64 がPATHにない場合は `-DQEMU_SYSTEM_RISCV64=...` を付与 |
 | dummy_gcc | （プリセット無し．`-DASP3_TARGET=dummy_gcc`） | cfgテスト用ホストビルド |
 | pico2_riscv_gcc | pico2_riscv | 実機（run=OpenOCD書込み（rp2350-riscv.cfg）．gdb/console等）．SDK非依存ベアメタル（Xh3irq） |
-| esp32c3_gcc | **esp32c3-qemu** | QEMU（run）．**Espressif版QEMU（esp32c3マシンを持つfork）が必要**＝PATHにない場合は `-DQEMU_SYSTEM_RISCV32_ESP=...` を付与．ELFでなくフラッシュイメージ（asp_flash.bin＝Direct Boot形式・ポストビルド生成）から起動．実機（ESP32-C3-DevKit）は今後整備（同イメージを `esptool write_flash 0x0` で書込み可） |
+| esp32c3_gcc | **esp32c3-qemu**／esp32c3 | QEMU（run）．**Espressif版QEMU（esp32c3マシンを持つfork）が必要**＝PATHにない場合は `-DQEMU_SYSTEM_RISCV32_ESP=...` を付与．ELFでなくフラッシュイメージ（asp_flash.bin＝Direct Boot形式・ポストビルド生成）から起動／実機（run=esptool書込み．ポートは `-DESP32C3_PORT=...`）．実機コンソールは既定でUSB Serial/JTAG（`/dev/ttyACM*`直結．UART配線ボードは `-DESP32C3_CONSOLE=uart0`）．テスト一括は `scripts/ci/run_board_esp32c3.py`（ESP32C3_TTY/ESPTOOL環境変数） |
 
 CMake対応の経緯は `docs/dev/cmake.md` を参照。
 

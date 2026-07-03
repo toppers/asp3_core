@@ -19,7 +19,7 @@ TOPPERS/ASP3カーネルを上流追従しながら、各社SDK（Raspberry Pi P
 | API | TOPPERS API互換（識別子プレフィックス `asp3`） |
 | 第一目的 | 各社SDKとの協調動作（4リポジトリを共通基盤に統合） |
 | ライセンス | TOPPERSライセンス（改変版である旨を明示。「TOPPERS/」名は規則第4条＝運営委員会承認マター） |
-| 対象ターゲット | ARMv8-M(Cortex-M33) / ARMv8-A(Cortex-A35) / RISC-V(Hazard3) ＋ POSIX / QEMU（3 ISAとも実機対応済み：PICO2(ARM/RISC-V)・STM32MP257F-DK） |
+| 対象ターゲット | ARMv8-M(Cortex-M33) / ARMv8-A(Cortex-A35) / RISC-V(Hazard3, ESP32-C3) ＋ POSIX / QEMU（3 ISAとも実機対応済み：PICO2(ARM/RISC-V)・STM32MP257F-DK・ESP32-C3） |
 
 ### 機能追加計画
 

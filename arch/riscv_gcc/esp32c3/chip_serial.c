@@ -26,6 +26,15 @@
 #include "chip_serial.h"
 
 /*
+ *  コンソール実体（UART0／USB Serial/JTAG）の選択（chip_serial.h参照）
+ */
+#ifdef TOPPERS_ESP32C3_CONSOLE_USBJTAG
+#define ESP32C3_SIO(name)	esp32c3_usbjtag_##name
+#else /* TOPPERS_ESP32C3_CONSOLE_USBJTAG */
+#define ESP32C3_SIO(name)	esp32c3_uart_##name
+#endif /* TOPPERS_ESP32C3_CONSOLE_USBJTAG */
+
+/*
  *  低レベル出力用のSIOポート管理ブロック
  */
 static SIOPCB	*p_siopcb_target_fput;
@@ -36,7 +45,7 @@ static SIOPCB	*p_siopcb_target_fput;
 void
 sio_initialize(EXINF exinf)
 {
-	esp32c3_uart_initialize();
+	ESP32C3_SIO(initialize)();
 }
 
 /*
@@ -45,7 +54,7 @@ sio_initialize(EXINF exinf)
 void
 sio_terminate(EXINF exinf)
 {
-	esp32c3_uart_terminate();
+	ESP32C3_SIO(terminate)();
 }
 
 /*
@@ -54,7 +63,7 @@ sio_terminate(EXINF exinf)
 void
 sio_isr(EXINF exinf)
 {
-	esp32c3_uart_isr((ID) exinf);
+	ESP32C3_SIO(isr)((ID) exinf);
 }
 
 /*
@@ -68,7 +77,7 @@ sio_opn_por(ID siopid, EXINF exinf)
 	/*
 	 *  デバイス依存のオープン処理
 	 */
-	p_siopcb = esp32c3_uart_opn_por(siopid, exinf);
+	p_siopcb = ESP32C3_SIO(opn_por)(siopid, exinf);
 
 	/*
 	 *  低レベル出力用のSIOポートを記録する．
@@ -93,7 +102,7 @@ sio_cls_por(SIOPCB *p_siopcb)
 	/*
 	 *  デバイス依存のクローズ処理
 	 */
-	esp32c3_uart_cls_por(p_siopcb);
+	ESP32C3_SIO(cls_por)(p_siopcb);
 
 	/*
 	 *  SIOの割込みをマスクする．
@@ -107,7 +116,7 @@ sio_cls_por(SIOPCB *p_siopcb)
 bool_t
 sio_snd_chr(SIOPCB *p_siopcb, char c)
 {
-	return(esp32c3_uart_snd_chr(p_siopcb, c));
+	return(ESP32C3_SIO(snd_chr)(p_siopcb, c));
 }
 
 /*
@@ -116,7 +125,7 @@ sio_snd_chr(SIOPCB *p_siopcb, char c)
 int_t
 sio_rcv_chr(SIOPCB *p_siopcb)
 {
-	return(esp32c3_uart_rcv_chr(p_siopcb));
+	return(ESP32C3_SIO(rcv_chr)(p_siopcb));
 }
 
 /*
@@ -125,7 +134,7 @@ sio_rcv_chr(SIOPCB *p_siopcb)
 void
 sio_ena_cbr(SIOPCB *p_siopcb, uint_t cbrtn)
 {
-	esp32c3_uart_ena_cbr(p_siopcb, cbrtn);
+	ESP32C3_SIO(ena_cbr)(p_siopcb, cbrtn);
 }
 
 /*
@@ -134,14 +143,14 @@ sio_ena_cbr(SIOPCB *p_siopcb, uint_t cbrtn)
 void
 sio_dis_cbr(SIOPCB *p_siopcb, uint_t cbrtn)
 {
-	esp32c3_uart_dis_cbr(p_siopcb, cbrtn);
+	ESP32C3_SIO(dis_cbr)(p_siopcb, cbrtn);
 }
 
 /*
  *  SIOポートからの送信可能コールバック
  */
 void
-esp32c3_uart_irdy_snd(EXINF exinf)
+ESP32C3_SIO(irdy_snd)(EXINF exinf)
 {
 	sio_irdy_snd(exinf);
 }
@@ -150,7 +159,7 @@ esp32c3_uart_irdy_snd(EXINF exinf)
  *  SIOポートからの受信通知コールバック
  */
 void
-esp32c3_uart_irdy_rcv(EXINF exinf)
+ESP32C3_SIO(irdy_rcv)(EXINF exinf)
 {
 	sio_irdy_rcv(exinf);
 }
@@ -161,16 +170,31 @@ esp32c3_uart_irdy_rcv(EXINF exinf)
 
 /*
  *  SIOポートへのポーリング出力
+ *
+ *  USB Serial/JTAGコンソールでは，ホスト（端末プログラム）がパケットを
+ *  読み出さない限り送信FIFOが空かないため，リトライ上限を設けて出力を
+ *  捨てる（ホスト未接続でシステムが固まるのを防ぐ）．
  */
 static void
-esp32c3_uart_fput(char c)
+esp32c3_sio_fput(char c)
 {
+#ifdef TOPPERS_ESP32C3_CONSOLE_USBJTAG
+	uint_t retry;
+
+	for (retry = 5000U; retry > 0U; retry--) {
+		if (ESP32C3_SIO(snd_chr)(p_siopcb_target_fput, c)) {
+			break;
+		}
+		sil_dly_nse(100);
+	}
+#else /* TOPPERS_ESP32C3_CONSOLE_USBJTAG */
 	/*
 	 *  送信できるまでポーリング
 	 */
-	while (!(esp32c3_uart_snd_chr(p_siopcb_target_fput, c))) {
+	while (!(ESP32C3_SIO(snd_chr)(p_siopcb_target_fput, c))) {
 		sil_dly_nse(100);
 	}
+#endif /* TOPPERS_ESP32C3_CONSOLE_USBJTAG */
 }
 
 /*
@@ -180,7 +204,7 @@ void
 target_fput_log(char c)
 {
 	if (c == '\n') {
-		esp32c3_uart_fput('\r');
+		esp32c3_sio_fput('\r');
 	}
-	esp32c3_uart_fput(c);
+	esp32c3_sio_fput(c);
 }

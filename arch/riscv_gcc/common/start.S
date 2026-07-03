@@ -61,10 +61,16 @@
 ALABEL(start)
     /*
      *  Machine割込みの禁止
+     *
+     *  mie/mip CSRを実装しないチップ（ESP32-C3＝アクセスすると不正
+     *  命令例外になる）は，チップ依存部でTOPPERS_OMIT_MIE_INITを定義
+     *  してクリアを抑止する（割込みの禁止はmstatus.MIEで足りる）．
      */
     csrrc  t0, mstatus, MSTATUS_MIE
+#ifndef TOPPERS_OMIT_MIE_INIT
     csrw   mie, 0
     csrw   mip, 0
+#endif /* TOPPERS_OMIT_MIE_INIT */
 
     /*
      *  ブートハート以外のパーキング

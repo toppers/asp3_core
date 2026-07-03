@@ -42,12 +42,28 @@ list(APPEND ASP3_ARCH_C_FILES
 )
 
 #
-#  非TECS版SIOドライバ（UART0）
+#  非TECS版SIOドライバ（コンソール実体の選択）
 #
-list(APPEND ASP3_SYSSVC_TARGET_C_FILES
-    ${CHIPDIR}/chip_serial.c
-    ${CHIPDIR}/esp32c3_uart.c
-)
+#  ESP32C3_CONSOLE=uart0（既定）… UART0（QEMU・UARTブリッジ付きボード）
+#  ESP32C3_CONSOLE=usbjtag      … USB Serial/JTAGコントローラ
+#                                 （UARTブリッジを持たないネイティブUSB
+#                                 ボード．/dev/ttyACM*がそのままコンソール）
+#
+if(NOT DEFINED ESP32C3_CONSOLE)
+    set(ESP32C3_CONSOLE uart0)
+endif()
+if(ESP32C3_CONSOLE STREQUAL "usbjtag")
+    list(APPEND ASP3_COMPILE_DEFS TOPPERS_ESP32C3_CONSOLE_USBJTAG)
+    list(APPEND ASP3_SYSSVC_TARGET_C_FILES
+        ${CHIPDIR}/chip_serial.c
+        ${CHIPDIR}/esp32c3_usbjtag.c
+    )
+else()
+    list(APPEND ASP3_SYSSVC_TARGET_C_FILES
+        ${CHIPDIR}/chip_serial.c
+        ${CHIPDIR}/esp32c3_uart.c
+    )
+endif()
 
 #
 #  PLIC・Machine Timerは使用しない（割込みコントローラは割込み

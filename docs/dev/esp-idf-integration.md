@@ -208,9 +208,56 @@ kernel/・include/・arch/riscv_gcc/common/ 等のPRISTINE/EXTENDED領域への�
 （新規追加のみ）。DIVERGENCE_MAP.mdに `arch/riscv_gcc/esp32c3/`・
 `target/esp32c3_gcc/` をNEWとして追記済み。
 
-### 残作業（Phase A完了までに）
+### Phase A（実機）結果（2026-07-03）
 
-- 実機ESP32-C3-DevKitでのtest_porting／testexec／dlynse較正（SIL_DLY_TIM1/2・
-  CORE_CLK_MHZの実測）
-- OS Awareness（osdebug）の動作確認（chip_os_awareness.pyはMMIO読出しで実装済み・未検証）
+実機ボード（ESP32-C3 rev v0.4・内蔵フラッシュ4MB・ネイティブUSB接続＝
+UARTブリッジなし・USBは303a:1001 USB Serial/JTAGとして列挙）で検証。
+
+**実機で判明した事項（QEMUとの差分）**：
+
+- **mie/mip CSRが存在しない**：実機C3のCPUはmie/mipを実装せず，アクセス
+  すると不正命令例外になる（`csrwi mie,0`＝共通start.Sの4命令目で
+  Guru Meditation panicとして発覚）。QEMUのmie全許可必須とは**正反対**。
+  → 共通`start.S`に`TOPPERS_OMIT_MIE_INIT`ガードを追加（既定は従来
+  どおり＝他RISC-Vターゲット不変）し，esp32c3のchip層で定義。
+  chip_initializeのmie設定は`TOPPERS_USE_QEMU`時のみに変更。
+- **Direct Bootは実機ROMで動作**（rev v0.4＝ECO3以降。ROMがマジックを
+  検出しflash+8へジャンプすることを確認）。
+- **CPUクロックはリセット既定のXTAL/2＝20MHzのまま起動**：Direct Boot
+  では二段ブートローダのクロック設定が無いため。dlynse計測（ループ
+  200ns/4サイクル）で発覚。ROMがブート時に有効化したBBPLL（480MHz）
+  へ`SYSTEM_CPU_PER_CONF`／`SYSTEM_SYSCLK_CONF`の2レジスタで切り替え，
+  **160MHz動作を実測確認**（ループ25ns=4サイクル@160MHz）。
+  `CORE_CLK_MHZ=160`確定。
+- **dlynse較正**：SIL_DLY_TIM1=40・TIM2=25（実測：呼出しオーバヘッド
+  ≈43ns・ループ25ns）。
+
+**USB Serial/JTAGコンソールの追加**：UARTブリッジを持たないネイティブ
+USBボードでは，UART0の出力はホストに届かない。チップ内蔵のUSB Serial/
+JTAGコントローラ（0x60043000・EP1 FIFO＋WR_DONEフラッシュ・割込み
+ソース26）用のSIOドライバ`esp32c3_usbjtag.[ch]`を追加し，
+`ESP32C3_CONSOLE`（uart0／usbjtag．既定＝QEMUはuart0・実機はusbjtag）
+で切替可能にした。ホスト（端末）未接続時は送信FIFOが空かないため，
+ポーリング出力（target_fput_log）はリトライ上限で出力を捨てる。
+
+**実機テストランナ**：`scripts/ci/run_board_esp32c3.py`（esptool書込み
+→pyserialのRTS操作でチップリセット→完走マーカまでキャプチャ）。
+esptool終了時のリセットに任せると出力先頭を取りこぼすため，リセットは
+ポートを開いた状態で自前で行う。プリセット`esp32c3`（実機用．run=
+esptool書込み・`-DESP32C3_PORT=`でポート指定）も追加。
+
+**検証結果（実機・160MHz）**：
+
+| テスト | 結果 |
+|---|---|
+| test_porting | **6/6 passed** |
+| testexec（36件） | **36/36 PASS**（cpuexc10=対象外SKIP扱いPASS・dlynse含む） |
+| QEMU回帰 | test_porting 6/6維持（クロック切替・コンソール変更後） |
+
+### 残作業
+
+- OS Awareness（osdebug）の実機動作確認（chip_os_awareness.pyはMMIO
+  読出しで実装済み・未検証。デバッガ接続はOpenOCD-esp32＝Espressif
+  fork版OpenOCDが必要）
 - devcontainerへのEspressif QEMU追加（現状CIはジョブ内ダウンロード）
+- Phase B（外側リポジトリasp3_esp_idf＝esp-hal統合＋Wi-Fi os_adapter shim）

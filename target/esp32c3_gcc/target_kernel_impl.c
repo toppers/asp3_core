@@ -72,6 +72,19 @@ hardware_init_hook(void)
 	sil_orw((void *)ESP32C3_RTC_CNTL_SWD_CONF,
 			ESP32C3_RTC_CNTL_SWD_AUTO_FEED_EN);
 	sil_wrw_mem((void *)ESP32C3_RTC_CNTL_SWD_WPROTECT, 0U);
+
+	/*
+	 *  CPUクロックをPLL（160MHz）へ切り替える
+	 *
+	 *  Direct Boot（二段ブートローダ無し）では，CPUはリセット既定の
+	 *  XTAL/2＝20MHzのまま起動する（実機dlynse計測で確認）．BBPLL
+	 *  （480MHz）はROMブートローダがブート時に有効化したものを流用
+	 *  する（SPI_FAST_FLASH_BOOT経路ではROMがPLLを使用している）．
+	 */
+	sil_mskw((void *)ESP32C3_SYSTEM_CPU_PER_CONF,
+			 ESP32C3_CPU_PER_CONF_PLL_160M, ESP32C3_CPU_PER_CONF_CLK_MASK);
+	sil_mskw((void *)ESP32C3_SYSTEM_SYSCLK_CONF,
+			 ESP32C3_SYSCLK_CONF_SEL_PLL, ESP32C3_SYSCLK_CONF_SEL_MASK);
 }
 
 void
@@ -99,11 +112,17 @@ target_initialize(void)
 	 *  ペリフェラル割込みソースをCPU割込み線へ割り当てる
 	 *  （SYSTIMER_TARGET0とFROM_CPU_0（タイマ割込みの強制用）は
 	 *  同じ線に多重マップする．target_timer.h参照．FROM_CPU_1は
-	 *  テストプログラム用のras_int対象＝INTNO1．target_test.h参照）
+	 *  テストプログラム用のras_int対象＝INTNO1．target_test.h参照．
+	 *  コンソール（INTNO_SIO＝線2）はビルド時選択に応じてUART0または
+	 *  USB Serial/JTAGのソースを割り当てる）
 	 */
 	esp32c3_intmtx_route(ESP32C3_INTSRC_SYSTIMER_TARGET0, 1U);
 	esp32c3_intmtx_route(ESP32C3_INTSRC_FROM_CPU_0, 1U);
+#ifdef TOPPERS_ESP32C3_CONSOLE_USBJTAG
+	esp32c3_intmtx_route(ESP32C3_INTSRC_USB_SERIAL_JTAG, 2U);
+#else /* TOPPERS_ESP32C3_CONSOLE_USBJTAG */
 	esp32c3_intmtx_route(ESP32C3_INTSRC_UART0, 2U);
+#endif /* TOPPERS_ESP32C3_CONSOLE_USBJTAG */
 	esp32c3_intmtx_route(ESP32C3_INTSRC_FROM_CPU_1, 3U);
 }
 
