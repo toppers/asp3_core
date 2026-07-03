@@ -256,8 +256,9 @@ esptool書込み・`-DESP32C3_PORT=`でポート指定）も追加。
 
 ### Phase B-0／B-1（外側リポジトリ・esp-hal統合）結果（2026-07-03）
 
-外側リポジトリ **asp3_esp_idf**（ローカル：`~/TOPPERS/ASP3CORE/asp3_esp_idf`．
-GitHubリポジトリは作成待ち）を作成し，esp-hal-3rdparty統合（B-1）まで完了。
+外側リポジトリ **[asp3_esp_idf](https://github.com/exshonda/asp3_esp_idf)**
+（ローカル：`~/TOPPERS/ASP3CORE/asp3_esp_idf`）を作成し，
+esp-hal-3rdparty統合（B-1）まで完了。
 
 - **B-0（骨格）**：asp3_core submodule（feat/esp32c3）＋
   `asp3/target/esp32c3_espidf/`（外部ターゲット規約）＋パス解決ヘルパ。
@@ -282,8 +283,6 @@ GitHubリポジトリは作成待ち）を作成し，esp-hal-3rdparty統合（B
 
 ### 残作業
 
-- GitHubリポジトリ exshonda/asp3_esp_idf の作成とpush（gh CLI失効のため
-  リポジトリ作成はユーザー操作待ち）
 - **Phase B-2：Wi-Fi os_adapter shim**（本丸）。NuttXの
   `arch/risc-v/src/esp32c3/esp_wifi_adapter.c`（2991行・osi_funcs約123
   エントリ）を設計テンプレートに，ASP3のタスク/セマフォ/データキュー/
