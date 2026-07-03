@@ -283,12 +283,13 @@ esp-hal-3rdparty統合（B-1）まで完了。
 
 ### 残作業
 
-- **Phase B-2：Wi-Fi os_adapter shim**（本丸）。NuttXの
-  `arch/risc-v/src/esp32c3/esp_wifi_adapter.c`（2991行・osi_funcs約123
-  エントリ）を設計テンプレートに，ASP3のタスク/セマフォ/データキュー/
-  アラームで書き起こす。blobのmalloc要求（4系統）はカーネル外の固定長
-  メモリプールベースの簡易ヒープでラップ（禁則②回避）。スコープは
-  init〜scan〜AP接続まで
+- **Phase B-2：Wi-Fi os_adapter shim**（実施中・asp3_esp_idf@4b8b55e）。
+  shim全実装（静的プール方式・osiテーブルABI 0x8全エントリ・
+  wpa_supplicant/mbedtls/PHYフル較正のビルド統合）が完了し，**実機で
+  `esp_wifi_init()`成功・イベント配送動作を確認**。残課題＝
+  `esp_wifi_start()`内のMAC HW起動待ちポーリング（未文書レジスタ
+  0x60033D14 bit0）で停止する件の解明（クロック/電源ドメインの
+  起動順序疑い）。詳細は asp3_esp_idf の `docs/wifi-shim.md`
 - OS Awareness（osdebug）の実機動作確認（chip_os_awareness.pyはMMIO
   読出しで実装済み・未検証。デバッガ接続はOpenOCD-esp32＝Espressif
   fork版OpenOCDが必要）
