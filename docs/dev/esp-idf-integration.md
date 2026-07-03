@@ -291,8 +291,12 @@ esp-hal-3rdparty統合（B-1）まで完了。
   ①モデムクロック未初期化（SYSTEM_WIFI_CLK_EN_REGをhardware_init_hookで
   セット）②coex os_adapter登録③ROM coexist_funcsのNULL回避（ダミー
   no-opテーブル）。詳細は asp3_esp_idf の `docs/wifi-shim.md`
-- **Phase B-2b：AP接続（WPA2）**（未着手）。scan後のconnect経路。較正の
-  NVS永続化なし（毎回フル較正）
+- **Phase B-2b：WPA2 AP接続＝実機成功（完了・asp3_esp_idf@6956669）**。
+  実機ESP32-C3がWPA2 APへL2接続成立（STA_CONNECTED）。WPA2 4-way
+  ハンドシェイクタイムアウト（reason=15）を実機JTAGで解明した2つの
+  Direct Boot起因shimバグ（①HW RNGレジスタアドレス誤りでSNonce全ゼロ
+  ②PSA Crypto未初期化でPTK/MIC不一致）を修正。IP/DHCPはスコープ外
+  （L2まで）。詳細は asp3_esp_idf の `docs/wifi-shim.md`
 - OS Awareness（osdebug）の実機動作確認（chip_os_awareness.pyはMMIO
   読出しで実装済み・未検証。デバッガ接続はOpenOCD-esp32＝Espressif
   fork版OpenOCDが必要）
