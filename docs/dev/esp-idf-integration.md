@@ -283,13 +283,16 @@ esp-hal-3rdparty統合（B-1）まで完了。
 
 ### 残作業
 
-- **Phase B-2：Wi-Fi os_adapter shim**（実施中・asp3_esp_idf@4b8b55e）。
-  shim全実装（静的プール方式・osiテーブルABI 0x8全エントリ・
-  wpa_supplicant/mbedtls/PHYフル較正のビルド統合）が完了し，**実機で
-  `esp_wifi_init()`成功・イベント配送動作を確認**。残課題＝
-  `esp_wifi_start()`内のMAC HW起動待ちポーリング（未文書レジスタ
-  0x60033D14 bit0）で停止する件の解明（クロック/電源ドメインの
-  起動順序疑い）。詳細は asp3_esp_idf の `docs/wifi-shim.md`
+- **Phase B-2a：Wi-Fi scan＝実機成功（完了・asp3_esp_idf@1686997）**。
+  実機ESP32-C3で`esp_wifi_init→start→scan`が完動し，**周囲AP16〜17個の
+  SSID/RSSI/chを実受信**（RF較正も機能）。shim全実装（静的プール・osi
+  テーブルABI 0x8全エントリ・wpa_supplicant/mbedtls/PHYフル較正の
+  ビルド統合）＋実機JTAGで解明した3つのDirect Boot起因ブロッカーの解決：
+  ①モデムクロック未初期化（SYSTEM_WIFI_CLK_EN_REGをhardware_init_hookで
+  セット）②coex os_adapter登録③ROM coexist_funcsのNULL回避（ダミー
+  no-opテーブル）。詳細は asp3_esp_idf の `docs/wifi-shim.md`
+- **Phase B-2b：AP接続（WPA2）**（未着手）。scan後のconnect経路。較正の
+  NVS永続化なし（毎回フル較正）
 - OS Awareness（osdebug）の実機動作確認（chip_os_awareness.pyはMMIO
   読出しで実装済み・未検証。デバッガ接続はOpenOCD-esp32＝Espressif
   fork版OpenOCDが必要）
