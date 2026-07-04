@@ -658,3 +658,90 @@ INTMTX map[src23],PLICMX_ENABLE,PLICMX_PRI[3]`）
   target_timer.c`（`esp32c6_diag_hrt_count`）に分散している。いずれも
   `ESP32C6_DIAG_EXC_DUMP`未定義時は完全に無効化される（既定OFF）ため
   他ターゲット・通常ビルドへの影響はない。
+
+## 解決（同セッション内）：真因は`mie` CSRが実機で一度も有効化されていなかったこと
+
+上記の「線3固有の書込み拒否」自体は，より大きな謎（線1・2も含め
+CPUへの割込み配送が一切成立しない）の**副次的な事象**であり，本筋
+ではなかった。本筋は次の通り確定した。
+
+### 決定的テスト：`mie` CSRへの実際のアクセス
+
+`arch/riscv_gcc/esp32c6/chip_kernel_impl.h`は「ESP32-C3はmie/mip CSRを
+実装せずアクセスすると不正命令例外になる」という前提から
+`TOPPERS_OMIT_MIE_INIT`を定義し，共通部`start.S`でのmie/mipクリアを
+抑止していた。この前提はC3からの類推であり，**C6実機で実際に検証
+されたことがなかった**（milestone 1時点のコメントでも「未検証」と
+明記されていた）。
+
+`logtask_main`に一時的な診断計装を追加し，`csrr mie`を実機で直接
+発行して確認したところ，**不正命令例外にはならず正常に読み出せ，
+値は`0x00000000`（リセット直後は全ビット無効）だった**。この1点が
+すべてを説明する：PLIC_MX側（ソースルーティング・ENABLE・PRI・
+THRESH・EIP）をどれだけ正しく設定しても，標準RISC-VのCSRである
+`mie`自体が全ビット0のままでは，CPUコアはそもそも外部割込みトラップ
+を一切認識しない。これが「TIMER（線1）・SIO（線2）・線3（ソフト
+ウェア強制トリガ）のいずれも実機でCPUへの割込み配送が一度も成立
+しなかった」現象の真因であり，「線3のPRI／ENABLE書込みが無視される」
+という奇妙な副次的観測（線3固有のerrataの可能性が高いが未追跡）とは
+別の，より根本的な問題だった。
+
+### 修正内容
+
+- `arch/riscv_gcc/esp32c6/chip_kernel_impl.h`：`TOPPERS_OMIT_MIE_INIT`
+  の`#define`を削除（C6では定義しない）。これにより共通部`start.S`の
+  早期`mie`/`mip`クリアが有効化される（実害なし＝リセット直後の
+  `mie`は既に0であることを確認済み）。
+- `arch/riscv_gcc/esp32c6/chip_kernel_impl.c`：`chip_initialize()`で
+  `csrw mie, ~0`を**QEMU限定から実機でも無条件に実行するよう変更**。
+  従来はQEMUのみ想定した処置だったが，実機でこそ必要だった。
+
+### 検証結果（実機，ESP32-C6FH4 rev v0.2，`/dev/ttyACM1`）
+
+修正後，フルクリーンビルド（`rm -rf build/esp32c6 && cmake --preset
+esp32c6 -B build/esp32c6 && cmake --build build/esp32c6`，診断計装は
+すべて削除済み＝`git diff e57a7a6 -- <診断対象ファイル群>`が空である
+ことを確認）で実機書込み・起動したところ：
+
+```
+System logging task is started on port 1.
+Sample program starts (exinf = 0).
+task1 is running (001).   |
+task1 is running (002).   |
+task1 is running (003).   |
+no time event is processed in hrt interrupt.
+（以下，"no time event is processed in hrt interrupt." が周期的に
+　多数出力され，task1のカウントも進み続ける）
+```
+
+`logtask_main`のクラッシュ（"Sy"で停止）は完全に解消し，`sample1`の
+並行タスクが正常に動作し，`"no time event is processed in hrt
+interrupt."`（HRT割込みハンドラ内で処理すべき時間イベントが無い場合
+に出力される，正常系のメッセージ）が周期的に出力され続けることから，
+**SYSTIMER（HRT）割込みが実機で正しく・継続的に配送されていることを
+確認した**。第2マイルストーンの記述にあった「実機でSYSTIMER割込みが
+機能した」という記載は，本セッションの調査により**誤りだったことが
+判明した**（実際には一度も配送されておらず，カーネル起動直後の
+最初のタスク切替えが`sta_ker`からの直接ディスパッチで割込み非依存に
+成立していたために，これまで問題が露見しなかった）。
+
+### 未解決のまま残った副次的な謎（本筋の解決には無関係）
+
+- 線3（`PLICMX_PRI[3]`・`PLICMX_ENABLE`のbit3）への書込みが，本修正
+  （`mie`有効化）の**前**の実機診断では直後の読返しでも反映されない
+  という現象を観測した（詳細は前節）。`mie`修正後にこの副次的な現象
+  自体が再現するかは**未確認**（本筋の解決を優先し，診断計装は全て
+  リバート済みのため）。もし今後，線3（`INTNO1`／`ras_int`用の
+  テスト割込み）を実際に使う場面（`test/porting`等）で同様の問題が
+  再発した場合は，本ドキュメントのこの節を参照し，線4・5等の別の
+  線でも同じ現象が起きるか切り分けること。
+
+### 残作業（`mie`修正後）
+
+1. PCR経由のCPUクロックPLL切替（未実施．リセット既定クロックの
+   まま＝`CORE_CLK_MHZ=40`固定・`SIL_DLY_TIM1/2`も未較正）。
+2. SYSTIMER（HRT）のタイミング精度検証（dlynse較正含む．割込み配送
+   自体は本セッションで確認できたが，実際の周期の正確さ＝
+   `ESP32C6_SYSTIMER_TICKS_PER_US=16`の実測検証は別途必要）。
+3. `test/porting`（6項目）での動作確認。
+4. LPコアとの相互作用の確認（未確認）。
