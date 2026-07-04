@@ -325,3 +325,9 @@ Wi-Fi os_adapter shim（Phase B-2）で成立したWPA2 AP接続（L2）の上�
 **検証結果（実機）**：`apps/wifi_dhcp`でSTA_CONNECTED→DHCP取得
 （`192.168.1.56`）→ゲートウェイへのraw ICMP ping継続成功。
 既存ビルド（`wifi_scan`・`tp-hw`）への回帰なし。
+
+その後`LWIP_TCP`を有効化し，lwIP同梱の`contrib/apps/tcpecho_raw`
+（ポート7）を追加。開発機から`nc`でTCP接続し，短文および3000バイト
+（複数TCPセグメント）のペイロードとも欠落なくエコーバックされることを
+実機で確認（RAM使用率93.68%→93.86%，320KB中）。DHCP／ping動作への
+回帰なし。asp3_core側の変更は本項もゼロ。
