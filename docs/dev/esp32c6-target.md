@@ -736,12 +736,75 @@ interrupt."`（HRT割込みハンドラ内で処理すべき時間イベント�
   再発した場合は，本ドキュメントのこの節を参照し，線4・5等の別の
   線でも同じ現象が起きるか切り分けること。
 
-### 残作業（`mie`修正後）
+### `test/porting`（6項目）実機結果：6/6 PASS
 
-1. PCR経由のCPUクロックPLL切替（未実施．リセット既定クロックの
-   まま＝`CORE_CLK_MHZ=40`固定・`SIL_DLY_TIM1/2`も未較正）。
-2. SYSTIMER（HRT）のタイミング精度検証（dlynse較正含む．割込み配送
-   自体は本セッションで確認できたが，実際の周期の正確さ＝
-   `ESP32C6_SYSTIMER_TICKS_PER_US=16`の実測検証は別途必要）。
-3. `test/porting`（6項目）での動作確認。
-4. LPコアとの相互作用の確認（未確認）。
+`mie`修正後，フルクリーンビルドで`test_porting`を実機（同一ボード，
+`/dev/ttyACM1`）にビルド・書込み・実行した：
+
+```bash
+cmake --preset esp32c6 -B build/test_porting-esp32c6 \
+  -DASP3_APPLDIR=test/porting -DASP3_APPLNAME=test_porting \
+  -DASP3_EXTRA_APP_C_FILES=test/porting/tap.c \
+  -DESP32C6_PORT=/dev/ttyACM1
+cmake --build build/test_porting-esp32c6
+esptool --chip esp32c6 --port /dev/ttyACM1 write-flash 0x0 \
+  build/test_porting-esp32c6/asp_flash.bin
+```
+
+結果：
+
+```
+# test_porting: kernel porting verification
+1..6
+ok 1 - syslog_output
+ok 2 - tick_timer_basic
+ok 3 - task_create_activate
+ok 4 - semaphore_signal_wait
+ok 5 - eventflag_set_wait
+ok 6 - alarm_handler
+# 6/6 passed
+```
+
+**6/6 PASS**（`alarm_handler`＝タイマ割込み経路の項目も含む）。これで
+ESP32-C3の時と同じ「Phase A完了」の基準を満たした。
+
+### 残作業（`test/porting` 6/6 達成後）
+
+1. **PCR経由のCPUクロックPLL切替（未着手．次セッションへ明示的に
+   持ち越し）**。`asp3_esp_idf/hal/components/esp_hw_support/port/
+   esp32c6/rtc_clk.c`（450行）・`rtc_clk_init.c`（124行）を確認した
+   ところ，`rtc_clk_bbpll_configure()`はアナログBBPLLを`regi2c_write`
+   系（I2C風の内部レジスタ経由）で校正・ロック確認する複雑な
+   シーケンスであり，**単純なレジスタ2〜3本の書換えでは済まない**
+   （`docs/dev/esp32c6-target.md`第1マイルストーンで「誤った
+   レジスタ操作はハング等のリスクがあるため」と判断していたのは
+   正しい）。本セッションでは着手しなかった（`mie`修正・
+   `test_porting` 6/6達成を優先し，実機を壊すリスクのある新規の
+   複雑な操作を拙速に試すべきではないと判断）。次セッションで
+   着手する場合は，上記2ファイルを丁寧に移植し，各ステップごとに
+   実機で確認しながら進めること（現状の`CORE_CLK_MHZ=40`固定・
+   `SIL_DLY_TIM1/2=100`は変更不要で動作は継続する＝機能面のブロッカー
+   ではなく精度面の課題）。
+2. SYSTIMERのタイミング精度検証（`ESP32C6_SYSTIMER_TICKS_PER_US=16`
+   の実測較正）は，PCRクロック切替と表裏一体（実クロックが確定しないと
+   较正できない）のため，1とあわせて次セッションで実施するのが自然。
+   割込み配送自体（本セッションで解決した本筋）と，周期の実測精度
+   （このタスク）は独立した課題であることに注意。
+3. LPコアとの相互作用の確認（未確認．本セッションでは対象外＝HPコア
+   のみ）。
+
+### まとめ（本セッション終了時点）
+
+- **解決**：`logtask_main`クラッシュ（旧称「wild jump」）の真因は
+  `mie` CSRが実機で一度も有効化されていなかったこと。修正は
+  `arch/riscv_gcc/esp32c6/chip_kernel_impl.{c,h}`の2ファイルのみ
+  （`TOPPERS_OMIT_MIE_INIT`削除＋`csrw mie,~0`を実機でも実行）。
+- **検証**：`sample1`実機動作（task1〜3のループ・HRT割込みの継続的な
+  発火を確認）／`test_porting` 6/6 PASS（実機）。
+- **未着手（次セッションへの明示的な持ち越し）**：PCR経由のCPUクロック
+  PLL切替（アナログBBPLL校正．リスクが高いため拙速に着手しなかった）・
+  それに伴うSYSTIMER精度較正・LPコアとの相互作用確認。
+- **副次的な未解決の謎（本筋とは無関係，優先度低）**：CPU割込み線3
+  （`PLICMX_PRI[3]`・`ENABLE`のbit3）への書込みが`mie`修正前の診断で
+  直後の読返しでも反映されなかった現象。`mie`修正後に再現するかは
+  未確認。
