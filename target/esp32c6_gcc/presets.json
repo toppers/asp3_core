@@ -1,0 +1,52 @@
+{
+  "version": 4,
+  "include": [
+    "../../cmake/presets-base.json"
+  ],
+  "configurePresets": [
+    {
+      "name": "esp32c6-qemu",
+      "inherits": "_base",
+      "displayName": "ESP32-C6 / QEMU (Espressif fork)",
+      "description": "QEMU実行用（Espressif版QEMUがPATHにない場合は -DQEMU_SYSTEM_RISCV32_ESP=... を付与）",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-riscv64.cmake",
+      "cacheVariables": {
+        "ASP3_TARGET": "esp32c6_gcc",
+        "ESP32C6_QEMU": "ON"
+      }
+    },
+    {
+      "name": "esp32c6",
+      "inherits": "esp32c6-qemu",
+      "displayName": "ESP32-C6 (real board, USB Serial/JTAG console)",
+      "description": "実機用（コンソール=USB Serial/JTAG．書込みはrun=esptool．ポートは -DESP32C6_PORT=... で指定）",
+      "cacheVariables": {
+        "ESP32C6_QEMU": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "esp32c6-qemu",
+      "configurePreset": "esp32c6-qemu"
+    },
+    {
+      "name": "run-esp32c6-qemu",
+      "configurePreset": "esp32c6-qemu",
+      "targets": [
+        "run"
+      ]
+    },
+    {
+      "name": "esp32c6",
+      "configurePreset": "esp32c6"
+    },
+    {
+      "name": "run-esp32c6",
+      "configurePreset": "esp32c6",
+      "targets": [
+        "run"
+      ]
+    }
+  ]
+}

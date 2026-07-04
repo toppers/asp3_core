@@ -113,16 +113,136 @@ boot/clock/consoleを固めてから割込みに着手）。
 
 新規ターゲットにつき該当なし（`kernel/`等PRISTINE領域への変更はゼロ）。
 
-### 残作業（次のマイルストーン）
+### 残作業（第1マイルストーン時点）
 
-- **CLIC割込みコントローラの実装**（最大の残課題．ソフトウェア
-  ディスパッチ方式かハードウェアベクタ方式かはユーザーと設計判断が
-  必要＝着手前に確認すること）。
+- ~~CLIC割込みコントローラの実装~~ → **重要な訂正（第2マイルストーン
+  で判明）**：ESP32-C6のHPコアはCLICを使わない。詳細は下記。
 - PCR経由のCPUクロックPLL切替（現状はリセット既定クロックのまま．
   周波数未計測・dlynse較正未実施）。
 - SYSTIMER（HRT）の実機検証。
-- CLIC実装後，ASP3カーネル本体（cfg生成・chip_kernel_impl.c・
-  target_kernel_impl.c・target_timer.c・target.cmake等）を本格的に
-  統合し，test_porting（6項目）での動作確認まで進める。
 - LPコアとの相互作用の確認（本マイルストーンはHPコアのみ対象．
   未確認）。
+
+## 実施結果（第2マイルストーン．割込みコントローラ＋ASP3カーネル本体統合．2026-07-04）
+
+### 重要な訂正：ESP32-C6はCLICを使わない
+
+第1マイルストーンの調査時点ではCLIC（Espressif独自の非標準CLIC）を
+想定していたが，これは誤りだった。実際にはesp-hal-3rdparty
+（`asp3_esp_idf/hal` submodule）のchip別`soc_caps.h`を直接確認した
+ところ，**`SOC_INT_CLIC_SUPPORTED`はESP32-C6には定義されていない**
+（定義があるのはC5/C61/H4/H21/P4rev2+/S31のみ）。ESP32-C6は
+**`SOC_INT_PLIC_SUPPORTED`を定義**しており，そのレジスタ実体
+（`plic_reg.h`）はEspressifが「PLIC」と命名しているが，中身は
+**C3の割込みマトリクス（INTMTX）CPU側制御ブロックと全く同じ方式**
+（ENABLE／TYPE／CLEAR／EIP_STATUS／PRI×32／THRESHの単純な
+メモリマップトレジスタ．標準RISC-V PLIC＝claim/completeレジスタ方式
+ではない）。ソースルーティングもC3と同じ`INTMTX_BASE + 4*source`書込み
+方式（`esp-hal-3rdparty`のriscv/interrupt_plic.c・
+hal/interrupt_plic_ll.hで実装確認済み）。mtvecモードも
+`MTVEC_MODE_CSR=1`＝C3と同じ標準RISC-Vベクタドモード。
+
+相違点は次の3点のみ：
+1. ソースルーティング（`INTMTX_BASE=0x60010000`）とCPU割込み線制御
+   （`PLIC_MX_BASE=0x20001000`．異なるアドレス空間）が分離している
+   （C3は単一の`INTMTX_BASE`に両方が同居）。
+2. ペリフェラル割込みソースが77本（C3は62本）のため生ステータス
+   レジスタが3ワード（C3は2ワード）。
+3. ソフトウェア割込み（FROM_CPU_n）が`INTPRI_BASE=0x600C5000`
+   ペリフェラルにある（C3の`SYSTEM_BASE`相当）。
+
+したがって`intmtx_kernel_impl.h`・`chip_support.S`はC3のロジックを
+ほぼそのまま踏襲し，レジスタオフセットのみ差し替えた（新規の割込み
+方式の実装ではない）。
+
+### ASP3カーネル本体の統合状況
+
+`arch/riscv_gcc/esp32c6/`・`target/esp32c6_gcc/`一式をC3の同名
+ディレクトリを雛形に作成し，`git diff --stat feat/esp32c3 feat/esp32c6`
+で全差分を再現できる。主な変更点：
+
+- `esp32c6.ld`：C6はSOC_DROM_LOW＝SOC_IROM_LOW（共に0x42000000）で
+  IROM/DROM分離が無いため，C3のVMA==LMAトリック（`.text`と`.rodata`を
+  別ORIGINに分離）は不要と判明。`.text`セクション1つに
+  flash_header／entry／code／rodataをまとめる，より単純なリンカ
+  スクリプトにした。
+- `target_kernel_impl.c`：WDT無効化（第1マイルストーンで実機検証済み
+  のロジックをそのまま流用）。**CPUクロックのPLL切替は未実施**（C6は
+  クロック制御がPCRペリフェラルに移動しており，C3のSYSTEM_CPU_PER_CONF
+  相当の単純な2bit選択ではなくSPLL起動シーケンス自体が必要．誤った
+  レジスタ操作のリスクを避け，リセット既定クロックのまま動作させて
+  いる＝CORE_CLK_MHZ=40固定・SIL_DLY_TIM1/2は暫定値・未較正）。
+- CMakePresets.jsonに`target/esp32c6_gcc/presets.json`を追加登録。
+
+**ビルド結果**：`cmake --preset esp32c6 -B build/esp32c6 && cmake --build
+build/esp32c6`が0エラーで成功（サンプルsample1，FLASH 25360B・RAM
+12848B）。レジスタオフセットの逆算（esp-hal-3rdpartyのヘッダを
+1つずつ確認）が正確だったため，初回のフルビルドでコンパイル・
+リンクとも一発で成功した。
+
+**実機起動結果（部分成功）**：esptoolで書込み・実機起動したところ，
+ASP3カーネルのバナー（複数行）が実機のUSB Serial/JTAGコンソールに
+正しく出力された。これはDirect Boot・WDT無効化に加え，**実機で
+SYSTIMER割込み・INTMTX/PLIC_MXベースの割込みルーティング・
+ソフトウェア優先度昇格（THRESH）・USB Serial/JTAGの割込み駆動
+コンソール出力（ISRベース，本マイルストーンで初めて統合）が
+実際に機能したことを意味する**（すべて割込みが絡む機能であり，
+mie/mip CSR非搭載の前提＝TOPPERS_OMIT_MIE_INITがここまでは
+実機で成立していることも確認できた）。
+
+**未解決のバグ**：バナー出力後，`logtask_main`が起動して最初の
+`syslog_1("System logging task is started on port %d.", ...)`を
+呼び出す直前後で処理が停止する（コンソール出力が"Sy"の2文字で
+途切れる）。OpenOCD＋JTAGで追跡したところ，`mcause=2`
+（Illegal Instruction）の例外が発生していることを確認した
+（実機JTAG接続にはtarget/esp32c6.cfgのCPUTAPID既定値
+`0x0000dc25`が実機の実際のJTAG IDCODE`0x00005c25`と一致せず接続
+できない問題があり，`target/esp32c6.cfg`のローカルコピーを作成して
+IDCODEを実機に合わせて上書きすることで接続した）。ただし例外発生後の
+mepc/mtvecの値が想定外のアドレス（プログラム範囲外・ROM領域寄り）を
+指しており，複数回の例外が連鎖した後の状態を観測している可能性が
+高く，**「最初の」不正命令が実際にどこで発生したかは未特定**。
+次回の調査はリセット直後に`logtask_putc`／`logtask_main`へ
+ブレークポイントを張った状態で`continue`し，最初の到達点で止めて
+そこから数命令ずつ追う方針が有効と考えられる（本セッションでは
+JTAGセッション中に長時間ブロックする`continue`コマンドが実行環境の
+制約で中断されたため未完了）。
+
+### 変更したファイル（第2マイルストーン）
+
+| ファイル | 内容 |
+|---|---|
+| `arch/riscv_gcc/esp32c6/esp32c6.h` | CLIC誤解を訂正．INTMTX/PLIC_MX両ベースアドレス・PCR・INTPRI・SYSTIMER・割込みソース番号を追加 |
+| `CMakePresets.json` | `target/esp32c6_gcc/presets.json`の登録 |
+
+### 追加したファイル（第2マイルストーン）
+
+`arch/riscv_gcc/esp32c6/`（chip_kernel_impl.c/h・intmtx_kernel_impl.h・
+chip_support.S・chip.cmake・chip_kernel.h/.py・chip_os_awareness.py・
+chip_rename.def/.h・chip_unrename.h・chip_serial.c/.h/.cfg・
+chip_sil.h・chip_stddef.h・chip_asm.inc・esp32c6_uart.c/.h・
+esp32c6_usbjtag.c/.h）＋`target/esp32c6_gcc/`
+（esp32c6.ld・presets.json・run.cmake・target.cmake・
+target_kernel_impl.c/.h・target_timer.c/.h・target_kernel.cfg/.h/.py・
+target_timer.cfg・target_serial.cfg/.h・target_test.h・target_sil.h・
+target_stddef.h・target_syssvc.h・target_asm.inc・target_cfg1_out.h・
+target_check.py・target_os_awareness.py・target_rename.def/.h・
+target_unrename.h）。すべてC3の同名ファイルを雛形に作成。
+
+### 検証結果（第2マイルストーン）
+
+| テスト | 実施 | 結果 |
+|---|---|---|
+| ビルド（`cmake --preset esp32c6`） | ○ | 0エラーで成功 |
+| 実機起動（バナー表示） | ○ | 複数行のバナー出力を確認＝割込み（SYSTIMER・PLIC_MXルーティング・THRESH昇格・USB Serial/JTAG ISR）が実機で機能 |
+| 実機起動（logtask以降） | ✗ | `logtask_main`の初回syslog呼出し付近でIllegal Instruction例外＝原因未特定 |
+| test_porting | − | 未実施（上記バグ解消が前提） |
+
+### 残作業（第2マイルストーン時点）
+
+- **最優先**：`logtask_main`起動直後のIllegal Instruction例外の
+  原因特定（JTAG単一ステップでの追跡を継続すること）。
+- PCR経由のCPUクロックPLL切替（未実施．リセット既定クロックのまま）。
+- SYSTIMER（HRT）のタイミング精度検証（dlynse較正含む）。
+- LPコアとの相互作用の確認（未確認）。
+- 上記解消後，test_porting（6項目）での動作確認。
