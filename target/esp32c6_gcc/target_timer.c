@@ -22,6 +22,10 @@
 #include "target_timer.h"
 #include <sil.h>
 
+#ifdef ESP32C6_DIAG_EXC_DUMP
+volatile uint32_t esp32c6_diag_hrt_count = 0U;
+#endif /* ESP32C6_DIAG_EXC_DUMP */
+
 /*
  *  タイマの起動処理
  */
@@ -84,5 +88,8 @@ target_hrt_handler(void)
 	sil_wrw_mem((void *)ESP32C6_SYSTIMER_INT_CLR,
 				ESP32C6_SYSTIMER_INT_TARGET0);
 	sil_wrw_mem((void *)ESP32C6_INTPRI_CPU_INTR_FROM_CPU_0, 0U);
+#ifdef ESP32C6_DIAG_EXC_DUMP
+	esp32c6_diag_hrt_count++;
+#endif /* ESP32C6_DIAG_EXC_DUMP */
 	signal_time();
 }

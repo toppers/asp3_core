@@ -140,6 +140,7 @@ logtask_flush(uint_t count)
  */
 #ifdef ESP32C6_DIAG_EXC_DUMP
 extern void target_fput_log(char c);
+extern volatile uint32_t esp32c6_diag_hrt_count;
 
 static void
 diag_mark(const char *s)
@@ -147,6 +148,17 @@ diag_mark(const char *s)
 	while (*s != '\0') {
 		target_fput_log(*s);
 		s++;
+	}
+}
+
+static void
+diag_puthex32(uint32_t v)
+{
+	static const char hextab[] = "0123456789abcdef";
+	int_t i;
+
+	for (i = 28; i >= 0; i -= 4) {
+		target_fput_log(hextab[(v >> i) & 0xfU]);
 	}
 }
 #endif /* ESP32C6_DIAG_EXC_DUMP */
@@ -171,7 +183,95 @@ logtask_main(EXINF exinf)
 	syslog_1(LOG_NOTICE, "System logging task is started on port %d.",
 													LOGTASK_PORTID);
 #ifdef ESP32C6_DIAG_EXC_DUMP
-	diag_mark("[M4]");
+	diag_mark("[M4:");
+	diag_puthex32(esp32c6_diag_hrt_count);
+	target_fput_log(',');
+	diag_puthex32(*(volatile uint32_t *)(0x20001000U + 0x0CU));  /* EIP */
+	target_fput_log(',');
+	{
+		uint32_t ms;
+		__asm__ volatile ("csrr %0, mstatus" : "=r"(ms));
+		diag_puthex32(ms);
+	}
+	target_fput_log(',');
+	{
+		uint32_t mt;
+		__asm__ volatile ("csrr %0, mtvec" : "=r"(mt));
+		diag_puthex32(mt);
+	}
+	target_fput_log(']');
+	{
+		/* busy-wait a while (plain loop, no peripheral dependency) */
+		volatile uint32_t i;
+		for (i = 0U; i < 2000000U; i++) {
+			__asm__ volatile ("");
+		}
+	}
+	diag_mark("[M5:");
+	diag_puthex32(esp32c6_diag_hrt_count);
+	target_fput_log(',');
+	diag_puthex32(*(volatile uint32_t *)(0x20001000U + 0x0CU));  /* EIP */
+	target_fput_log(']');
+	{
+		/*
+		 *  決定的テスト：line3 (FROM_CPU_1) をソフトウェアから直接叩き，
+		 *  タイミングに一切依存しない形でCPUへの割込み配送そのものが
+		 *  成立するかを確認する（intno1_isrのカウンタで判定）．
+		 */
+		extern volatile uint32_t esp32c6_diag_intno1_count;
+		uint32_t before, after;
+		volatile uint32_t i;
+
+		/* manually force ENABLE bit3 + PRI[3]=2, bypassing whatever
+		 * set them originally, to isolate whether that alone fixes
+		 * delivery */
+		*(volatile uint32_t *)(0x20001000U + 0x10U + 3U * 4U) = 2U;
+		*(volatile uint32_t *)(0x20001000U + 0x00U) |= 0x8U;
+		diag_mark("[M6a:");
+		diag_puthex32(*(volatile uint32_t *)(0x20001000U + 0x10U + 3U * 4U));
+		target_fput_log(',');
+		diag_puthex32(*(volatile uint32_t *)(0x20001000U + 0x00U));
+		target_fput_log(']');
+
+		before = esp32c6_diag_intno1_count;
+		*(volatile uint32_t *)(0x600C5000U + 0x94U) = 1U;  /* FROM_CPU_1 */
+		for (i = 0U; i < 500000U; i++) {
+			__asm__ volatile ("");
+		}
+		after = esp32c6_diag_intno1_count;
+		diag_mark("[M6:");
+		diag_puthex32(before);
+		target_fput_log(',');
+		diag_puthex32(after);
+		target_fput_log(',');
+		diag_puthex32(*(volatile uint32_t *)(0x20001000U + 0x0CU));  /* EIP */
+		target_fput_log(',');
+		/* raw FROM_CPU_1 trigger register readback */
+		diag_puthex32(*(volatile uint32_t *)(0x600C5000U + 0x94U));
+		target_fput_log(',');
+		/* INTMTX_STATUS0 (sources 0-31; bit23=FROM_CPU_1) */
+		diag_puthex32(*(volatile uint32_t *)(0x60010000U + 0x134U));
+		target_fput_log(',');
+		/* INTMTX map reg for source 23 (FROM_CPU_1): should read 3 */
+		diag_puthex32(*(volatile uint32_t *)(0x60010000U + 23U * 4U));
+		target_fput_log(',');
+		/* PLICMX_ENABLE, PLICMX_PRI[3] */
+		diag_puthex32(*(volatile uint32_t *)(0x20001000U + 0x00U));
+		target_fput_log(',');
+		diag_puthex32(*(volatile uint32_t *)(0x20001000U + 0x10U + 3U * 4U));
+		target_fput_log(']');
+		diag_mark("[M7:");
+		/* PRI[1] (TIMER), PRI[2] (SIO), tnum_cfg_intno */
+		diag_puthex32(*(volatile uint32_t *)(0x20001000U + 0x10U + 1U * 4U));
+		target_fput_log(',');
+		diag_puthex32(*(volatile uint32_t *)(0x20001000U + 0x10U + 2U * 4U));
+		target_fput_log(',');
+		{
+			extern const uint_t _kernel_tnum_cfg_intno;
+			diag_puthex32((uint32_t)_kernel_tnum_cfg_intno);
+		}
+		target_fput_log(']');
+	}
 #endif /* ESP32C6_DIAG_EXC_DUMP */
 	while (true) {
 		while ((rercd = syslog_rea_log(&syslog)) >= 0) {

@@ -225,10 +225,17 @@ task(EXINF exinf)
  */
 #ifdef INTNO1
 
+#ifdef ESP32C6_DIAG_EXC_DUMP
+volatile uint32_t esp32c6_diag_intno1_count = 0U;
+#endif /* ESP32C6_DIAG_EXC_DUMP */
+
 void
 intno1_isr(EXINF exinf)
 {
 	intno1_clear();
+#ifdef ESP32C6_DIAG_EXC_DUMP
+	esp32c6_diag_intno1_count++;
+#endif /* ESP32C6_DIAG_EXC_DUMP */
 	SVC_PERROR(rot_rdq(HIGH_PRIORITY));
 	SVC_PERROR(rot_rdq(MID_PRIORITY));
 	SVC_PERROR(rot_rdq(LOW_PRIORITY));

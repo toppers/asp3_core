@@ -192,6 +192,20 @@ esp32c6_usbjtag_ena_cbr(SIOPCB *p_siopcb, uint_t cbrtn)
 		target_fput_log('E');
 		target_fput_log(']');
 #endif /* ESP32C6_DIAG_EXC_DUMP */
+		/*
+		 *  IN_EMPTYの生ステータスは，本コールバックが無効な間に発生した
+		 *  送信完了（直接書込みパスによる完了）でも立ったままになる
+		 *  （ENA=0の間はCPUへ届かないだけで，ペリフェラル内部のRAW
+		 *  ビット自体は誰もクリアしない限り残留する）．この状態のまま
+		 *  ENAを有効化すると，「新規の完了イベント」ではなく「既に
+		 *  発生済みの，本来届くはずだった過去のイベント」の残骸を
+		 *  拾おうとする形になり，実機（ESP32-C6）ではCPUへの割込み配送
+		 *  自体が発生しない事象を確認した（docs/dev/esp32c6-target.md
+		 *  参照）。有効化の直前に明示的にクリアしておき，以降の完了は
+		 *  必ず「ENA有効化後に新規発生するRAW立上り」となるようにする。
+		 */
+		sil_wrw_mem(ESP32C6_USBJTAG_INT_CLR(base),
+					ESP32C6_USBJTAG_INT_IN_EMPTY);
 		sil_wrw_mem(ESP32C6_USBJTAG_INT_ENA(base),
 					sil_rew_mem(ESP32C6_USBJTAG_INT_ENA(base))
 							| ESP32C6_USBJTAG_INT_IN_EMPTY);

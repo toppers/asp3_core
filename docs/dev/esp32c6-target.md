@@ -539,3 +539,122 @@ TYPEがリセット既定でedge型になっていた場合：
    の`option()`）で有効化できる．診断コードを追加する際は，実際の
    メッセージ送信と同じUSB Serial/JTAGの1バイトFIFOを奪い合わない
    よう注意すること（本セッションで一度Heisenbugを作った教訓）。
+
+### 続報（同セッション内）：TIMER（線1）も含めCPUに割込みが一切配送されない．PRI[3]／ENABLE bit3への書込みが実機で無視される
+
+上記「次の一手」1〜3は本セッション内で実施済み。結果は当初の予想と異なる，
+より根深いものだった。
+
+**まず，`logtask_main`の`[M4]`直後に`target_hrt_handler`用のグローバル
+カウンタ（`esp32c6_diag_hrt_count`，`target/esp32c6_gcc/target_timer.c`に
+追加．現在も`ESP32C6_DIAG_EXC_DUMP`配下に残存）を仕込み，約2,000,000回の
+空ループ（`[M4]`→`[M5]`間）を挟んで確認したところ，`hrt_count`は
+**0のまま**だった（`PLICMX_EIP`も0のまま）。これは「TIMER割込みは
+既に実証済み」という前回までの前提が誤りだったことを意味する
+（カーネル起動直後の最初のタスク切替え＝logtaskへのディスパッチは
+`sta_ker`からの直接呼出しで成立し，割込みを一切必要としないため，
+本当に「1回もCPU割込みが配送されていない」状態のままここまで到達
+できてしまう）。
+
+**さらにタイミング非依存の決定的テスト**として，`sample1.c`の
+`intno1_isr`（線3＝`INTNO1`＝`FROM_CPU_1`，`CFG_INT(INTNO1,
+{TA_ENAINT, INTNO1_INTPRI=-2})`で自動有効化設定済み）にもカウンタ
+（`esp32c6_diag_intno1_count`）を追加し，`logtask_main`から直接
+`ESP32C6_INTPRI_CPU_INTR_FROM_CPU_1`（`0x600C5094`）へ`1`を書き込んで
+**ソフトウェアから強制的に**線3の割込みを発生させた（`ras_int`同等の
+生レジスタ操作．タイミング・周辺デバイスの状態に一切依存しない）。
+結果：
+
+```
+[M6:00000000,00000000,00000000,00000001,00800000,00000003,00000006,00000003]
+```
+
+（フォーマット：`before,after,EIP,FROM_CPU_1読返し,INTMTX_STATUS0,
+INTMTX map[src23],PLICMX_ENABLE,PLICMX_PRI[3]`）
+
+読み解き：
+- `FROM_CPU_1`レジスタ自体は書き込んだ`1`を正しく読み返せている
+  （`0x00000001`）＝ソース側のトリガ自体は機能している。
+- `INTMTX_STATUS0`のbit23（source23=FROM_CPU_1に対応）が**立っている**
+  （`0x00800000`）＝ソースの生ステータスはINTMTXレベルで正しく
+  アサートされている。
+- `INTMTX`のsource23用MAPレジスタは`3`（線3への割当て）で正しい。
+- しかし**`PLICMX_ENABLE`が`0x00000006`（bit1＋bit2のみ）＝bit3
+  （線3）が有効になっていない**。`CFG_INT(INTNO1, {TA_ENAINT, ...})`
+  により`_kernel_initialize_object()`→`_kernel_initialize_interrupt()`
+  （`intmtx_config_int()`経由）で起動時に自動的に有効化されるはずが，
+  実機では有効になっていない。
+- **`PLICMX_PRI[3]`も`3`**（`INTPRI_TIMER`/`INTPRI_SIO`と同じ内部表現
+  `INT_IPM(-2)=2`になるはずが，`3`になっている＝期待値と不一致）。
+  比較のため同時に読んだ`PLICMX_PRI[1]`（TIMER）・`PLICMX_PRI[2]`
+  （SIO）は共に期待通り`2`だった（`[M7:00000002,00000002,00000003]`
+  ＝`PRI[1],PRI[2],tnum_cfg_intno`．`tnum_cfg_intno=3`で
+  `_kernel_intinib_table`の全3件がループ対象になっていることも確認済み。
+  生成された`kernel_cfg.c`の`_kernel_intinib_table`を直接確認したが，
+  3件とも`INTPRI`引数は同じ`-2`であり，コード上は3件とも同じ
+  `intmtx_config_int(intno, intatr, INT_IPM(-2)=2)`が呼ばれるはずで，
+  線3だけ`3`になる理由はソースコードからは説明できない）。
+- 当然，`intno1_isr`は**before/afterともに0のまま＝一度も呼ばれて
+  いない**。
+
+**さらに踏み込んで**，`logtask_main`から直接
+`PLICMX_PRI[3]`に`2`を強制書込みし，`PLICMX_ENABLE`に`|= 0x8`を
+強制実行した直後（同一箇所で間に他の命令を一切挟まない，同時刻の
+即時読返し）でも：
+
+```
+[M6a:00000003,00000006]
+```
+
+**書き込んだはずの値（PRI[3]=2, ENABLEのbit3）が反映されず，元の値
+（PRI[3]=3, ENABLEはbit3なし）のまま読み返された**。ディスアセンブル
+（`riscv64-unknown-elf-objdump`）で該当の`sw`命令自体が正しいアドレス
+（`PLICMX_BASE+0x1C`＝PRI[3]，`PLICMX_BASE+0x0`＝ENABLE）に対して
+生成されていることは確認済み（コンパイラ側の問題ではない）。
+
+**現状の解釈**：CPU割込み線3（`PLICMX`の`ENABLE`bit3・`PRI[3]`）への
+書込みが実機で***恒常的に無視される***（直後の読返しですら反映され
+ない）。線1（TIMER）・線2（SIO）は書込みが正しく反映される（値も
+一致）。この非対称性から，以下のいずれかを疑う：
+
+1. **線3特有のハードウェア制限／errata**：本実機（ESP32-C6FH4 rev
+   v0.2）が量産前/初期ステッピングであるため，`PLIC_MX`の一部の線
+   （特に3以降？）が未実装／別の目的に予約されている可能性。
+   `esp-hal-3rdparty`のドキュメント／soc_caps.hに，実装済みCPU割込み
+   線数の上限が明記されていないか要確認（`SOC_CPU_INTR_NUM`や類似の
+   マクロを検索）。
+2. **`PLIC_MX`ブロック自体，あるいはこの書込み経路が，実は`M`権限
+   （machine mode）以外からのアクセスを要求する，または何らかの
+   保護ビット（PMPなど）で書込みがサイレントに落ちている**：
+   ただし線1・2は同じアドレス空間内で正常に書き込めているため，
+   単純な全面ブロックではなく，線3（または線3以降）に限定した
+   何らかの制限と考えられる。
+3. **未検証**：線4，5等，線3以外の「未使用の」線でも同じ問題が
+   起きるか（線3固有の問題か，あるいは「まだ一度もCFG_INT登録
+   以外の方法で正しく初期化されていない全ての線」に共通する問題か）
+   の切り分けができていない。
+
+**次のセッションへの申し送り**：
+- まず**線4または線5**（`INTNO1`を一時的に3から変更するのではなく，
+  診断コード側で直接`PLICMX_BASE+0x10+4*4`等を触るだけで良い）に対して
+  同じ強制書込み＋即時読返しテストを行い，「線3固有」か「線3以降
+  すべて」かを切り分けること。
+- `esp-hal-3rdparty`（`asp3_esp_idf/hal`）で，ESP32-C6のCPU割込み線の
+  実装数上限（`SOC_CPU_INTR_NUM`相当）を確認し，本ポートが仮定している
+  「31本（線1〜31）」全てが実際に存在するか裏を取ること。
+- 上記のいずれもクリアなら，**「実は線1・2ですら，これまでCPUへの
+  実配送は一度も証明されていない」**という前提に立ち返り，PLIC_MXの
+  ENABLE／THRESH／PRIレジスタ操作だけでは実機で本当にCPU外部割込みを
+  トリガできるのか，ESP-IDFの実機ログ／トレース，または
+  `esp32c6_intmtx_route`以外に必要な初期化ステップ（例：
+  `PLIC_MXINT_CONF_REG`＝`0x200013FC`，本セッションではsleep-retention
+  専用と判断したが実は機能的な意味を持つかもしれない）が無いか，
+  再度`esp-hal-3rdparty`の`riscv/vectors.S`・起動コード
+  （`interrupt.c`ではなくCPU初期化そのもの）を確認すること。
+- 診断計装（`ESP32C6_DIAG_EXC_DUMP`）は現在，`syssvc/logtask.c`
+  （M1〜M7），`sample/sample1.c`（`cpuexc_handler`のダンプ・
+  `intno1_isr`のカウンタ），`arch/riscv_gcc/esp32c6/esp32c6_usbjtag.c`
+  （`[E]`・`{`マーカーとIN_EMPTYクリア），`target/esp32c6_gcc/
+  target_timer.c`（`esp32c6_diag_hrt_count`）に分散している。いずれも
+  `ESP32C6_DIAG_EXC_DUMP`未定義時は完全に無効化される（既定OFF）ため
+  他ターゲット・通常ビルドへの影響はない。
