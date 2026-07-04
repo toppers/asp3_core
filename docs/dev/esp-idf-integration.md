@@ -301,3 +301,27 @@ esp-hal-3rdparty統合（B-1）まで完了。
   読出しで実装済み・未検証。デバッガ接続はOpenOCD-esp32＝Espressif
   fork版OpenOCDが必要）
 - devcontainerへのEspressif QEMU追加（現状CIはジョブ内ダウンロード）
+
+### Phase C（外側リポジトリ・TCP/IP統合）結果（2026-07-04）
+
+Wi-Fi os_adapter shim（Phase B-2）で成立したWPA2 AP接続（L2）の上に，
+**lwIP（`NO_SYS=1`）による実通信**を実装。IP取得（DHCP）とゲートウェイ
+へのICMP ping継続成功を実機で確認した。
+
+- lwIP本体は[lwip-tcpip/lwip](https://github.com/lwip-tcpip/lwip)
+  （公式read-onlyミラー）をsubmoduleとして採用（`STABLE-2_2_1_RELEASE`
+  にpin）。`sys_arch`スレッド抽象化層は実装せず，lwIPコアAPI呼出しは
+  **net_task（cfg生成の唯一タスク）に集約**する単一実行文脈設計とした
+  （Wi-Fi shimの静的タスクプールとは独立の最小構成）。
+- Wi-Fiドライバとの接続は`esp_wifi_internal_tx`／
+  `esp_wifi_internal_reg_rxcb`上の薄いethernet netifとして実装。
+  rxコールバック（Wi-Fiタスク文脈）はフレームをボックス化して
+  net_taskのキューへ渡すのみに留め，lwIP呼出し（pbuf確保・
+  `netif->input`・eb解放）はnet_task側で行う。
+- ping確認はlwIP同梱の`contrib/apps/ping`（raw API版）をそのまま採用。
+- **asp3_core側の変更はゼロ**（Phase Bと同様，全て外側リポジトリで完結）。
+- 詳細設計・実機ログは asp3_esp_idf の `docs/tcpip-integration.md`。
+
+**検証結果（実機）**：`apps/wifi_dhcp`でSTA_CONNECTED→DHCP取得
+（`192.168.1.56`）→ゲートウェイへのraw ICMP ping継続成功。
+既存ビルド（`wifi_scan`・`tp-hw`）への回帰なし。
