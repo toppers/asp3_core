@@ -36,7 +36,7 @@
 | STM32 HAL統合 | `stm32-integration.md` | 完了（外側リポジトリ asp3_stm32cube＝A案submodule化＋非TECS+Python cfg化。NUCLEO-H563ZI/H533RE 実機検証済み＝test_porting 6/6・testexec。H533REのVTOR整列が重要知見） |
 | NXP MCUXpresso SDK統合 | `nxp-integration.md` | 完了（Phase A＝mimxrt685evk・Phase B＝asp3_mcuxsdk とも実機検証済＝testexec全件33/36 PASS。asp3_mcuxsdk側のCI・移植skillも消し込み済） |
 | ESP-IDF統合 | `esp-idf-integration.md` | 実施中（Phase A完了＝esp32c3ターゲット・Direct Boot・QEMU＝test_porting 6/6・testexec 35/36〔dlynseはQEMU想定NG〕・CI追加／**実機検証済**＝rev v0.4・160MHz化・USB Serial/JTAGコンソール・test_porting 6/6・**testexec 36/36**・dlynse較正。Phase B（外側リポジトリasp3_esp_idf）＝esp-hal統合（B-1）・Wi-Fi os_adapter shim（B-2a scan／B-2b WPA2接続）とも実機成功。Phase C＝lwIP統合（DHCP＋ゲートウェイping＋BSDソケット互換）も実機成功。残＝OS Awareness実機確認） |
-| ESP32-C6ターゲット | `esp32c6-target.md` | 実施中（`feat/esp32c6`ブランチ。第1マイルストーン＝実機でDirect Boot・WDT無効化・polled USB Serial/JTAGコンソール確認。第2マイルストーン＝**CLIC誤解を訂正**（C6はCLICでなくINTMTX同等の"PLIC"命名レジスタ）・ASP3カーネル本体をビルド0エラーで実機起動しバナー複数行出力（割込み駆動コンソール含め機能）まで到達したが，logtask起動直後にIllegal Instruction例外＝原因未特定で継続調査中。残＝例外原因特定・PCRクロック切替・SYSTIMER検証・test_porting） |
+| ESP32-C6ターゲット | `esp32c6-target.md` | 実施中（`feat/esp32c6`ブランチ。CLIC誤認を訂正＝実際はINTMTX同等の"PLIC_MX"命名レジスタ。**logtaskハング根本原因を特定・修正**＝`mie` CSRが実機で未初期化のまま（C3の「mie/mipアクセスは実機で例外」という前提がC6には成立せず，逆に有効化が必須だった）。修正後**実機でtest_porting 6/6 PASS**（Direct Boot・WDT無効化・割込み駆動USB Serial/JTAGコンソール・SYSTIMER/HRT割込み動作確認済み）。残＝PCRベースのCPUクロック切替〔SPLL較正．現状はリセット既定クロックのまま機能面は動作〕・cfg/kernel本体の正式ターゲット化〔現状は移植パターン確立〕） |
 | skillパッケージ | `skill-package.md` | 完了（移植ガイドskillとして各SDKリポジトリ内に実装＝asp3_fsp/asp3_stm32cube。picoは不要と判断。当初計画からの変更点は本ファイル参照） |
 | メモリ保護 | `memory-protection.md` | 計画中（arm_m 静的MPU スタックガード。PSPLIMは実装済み） |
 | SAFEG（ARMv8-M TrustZone） | `safeg.md` | 完了（SafeG-M デュアルOS。M1〜M4＋Phase B。an505(QEMU)/pico2/mimxrt685evk。既定OFF＝素ASP3不変） |
