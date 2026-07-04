@@ -241,8 +241,161 @@ target_unrename.h）。すべてC3の同名ファイルを雛形に作成。
 ### 残作業（第2マイルストーン時点）
 
 - **最優先**：`logtask_main`起動直後のIllegal Instruction例外の
-  原因特定（JTAG単一ステップでの追跡を継続すること）。
+  原因特定（下記「調査継続（同日）」参照．次のセッションはここから
+  再開すること）。
 - PCR経由のCPUクロックPLL切替（未実施．リセット既定クロックのまま）。
 - SYSTIMER（HRT）のタイミング精度検証（dlynse較正含む）。
 - LPコアとの相互作用の確認（未確認）。
 - 上記解消後，test_porting（6項目）での動作確認。
+
+## 調査継続（同日）：logtask クラッシュの深掘り
+
+第2マイルストーンの未解決バグについて，実機JTAG（OpenOCD＋GDB）と
+一時的なコード計装の両方で追加調査した。**根本原因はまだ特定できて
+いない**が，以下を確定させた。以降の作業は，この記録を前提に続ける
+こと（同じ調査をやり直さないため）。
+
+### 再現手順（100%再現）
+
+```bash
+cmake --build build/esp32c6
+esptool --chip esp32c6 --port /dev/ttyACM1 write-flash 0x0 build/esp32c6/asp_flash.bin
+# USB Serial/JTAG（/dev/ttyACM1，115200bps）をpyserialで開き，
+# RTSトグルでリセットしてから読み出す（esptool自身のリセットでは
+# 起動バナーの先頭を取りこぼすため）
+```
+
+バナー（複数行）が出力された直後，`logtask_main`の最初の
+`syslog_1("System logging task is started on port %d.", ...)`の
+出力が"S"または"Sy"（実行のたびに1〜2文字．非決定的）で止まる。
+以降は無出力（ハングではなく，JTAGで確認すると割込み自体は生き続けて
+いる＝下記参照）。
+
+### JTAG接続の設定（実機固有の既知の問題）
+
+`openocd-esp32`同梱の`target/esp32c6.cfg`は`_CPUTAPID 0x0000dc25`を
+既定値としているが，本実機（rev v0.2）の実際のJTAG IDCODEは
+`0x00005c25`（`part:0x0005`対`part:0x000d`）で一致せず接続できない。
+対処：`target/esp32c6.cfg`のローカルコピーを作成し`_CPUTAPID`を
+実機値に書き換え，`-s <ローカルコピーのディレクトリ>`を`-s <本来の
+scriptsディレクトリ>`より前に指定してOpenOCDの`find`で優先させる：
+
+```bash
+mkdir -p /tmp/ocd_scripts/target
+cp $OPENOCD_ESP32/share/openocd/scripts/target/esp32c6.cfg /tmp/ocd_scripts/target/
+sed -i 's/0x0000dc25/0x00005c25/' /tmp/ocd_scripts/target/esp32c6.cfg
+openocd -s /tmp/ocd_scripts -s $OPENOCD_ESP32/share/openocd/scripts \
+  -f board/esp32c6-builtin.cfg -c "gdb_memory_map disable" -c "gdb_flash_program disable"
+```
+
+（`gdb_memory_map disable`／`gdb_flash_program disable`が無いと，GDB
+接続時にOpenOCDがFreeRTOS前提のフラッシュ書込みアルゴリズムを実行
+しようとして`get(csr_uie) failed`等で失敗する＝本ターゲットはASP3で
+FreeRTOSではないため）。
+
+### 重大な制約：ライブJTAGデバッグがこのボードでは実質使えない
+
+本ボードはUSB Serial/JTAGの**同一物理USBポートがJTAGデバッグ用と
+ターゲット自身のコンソール出力用を兼ねる**（milestone 1から既知）。
+これが，ターゲットが**実際に動作中**（＝USB Serial/JTAGハードウェアを
+コンソールとして能動的に使用中）にJTAGで`continue`＋ブレークポイント
+待ちをすると，高確率で以下が発生することを確認した：
+
+- `libusb_bulk_write error: LIBUSB_ERROR_NO_DEVICE`
+- `esp_usb_jtag: device not found!` → `failed to revive USB device!`
+- `[esp32c6] Hart unexpectedly reset!`
+- GDBの`continue`が**数分単位でハングし，実行環境のタイムアウトで
+  中断される**（ハードウェアブレークポイント`hbreak`使用時も同様に
+  再現した＝ソフトウェアブレークポイントのフラッシュ書込み制約の
+  問題ではなかった）。
+
+このため，「リセット→ブレークポイント→continueでヒット」という
+通常のライブデバッグフローはこのボード構成では信頼できない。
+**有効だった代替手段**：ターゲットを（JTAGなしで）プレーンなpyserial
+キャプチャで自然にクラッシュさせ，その**crashed/stuck状態のまま**
+（新たにresetをかけずに）OpenOCD＋GDBを接続し，`monitor halt`＋
+メモリ／レジスタの直接読出し（`x/`・`monitor reg`）だけを行う（`continue`
+や新規ブレークポイントは使わない）。この方法は安定して機能した。
+
+### JTAGで確認できた事実
+
+- クラッシュ後に`monitor halt`すると，**PCが`0x42033da0`〜
+  `0x42036800`付近（試行ごとに微妙に異なるがこの狭い帯域内）で安定
+  する**。この番地は本プログラムの`.text`範囲（`0x42000000`〜
+  `0x42006310`）の**外側**＝未使用（消去済み＝0xFF相殺）のフラッシュ
+  領域であり，`nm`にも存在しないシンボル。→ **コードがプログラム
+  範囲外の未初期化フラッシュへ迷い込んで実行し続けている**
+  （不正命令として繰り返し例外化している可能性が高い＝いわゆる
+  「ワイルドジャンプ」）。
+- `mcause`を読むと，あるとき`0x00000002`（Illegal Instruction，例外），
+  別のときは`0x80000001`（最上位ビット＝割込み，下位5bit=1＝CPU割込み
+  線1＝SYSTIMER/FROM_CPU_0）。**両方が交互に観測される**ことから，
+  「ワイルドジャンプ先で不正命令を実行→例外→（何らかの理由で）元の
+  番地へ戻る／類似番地に留まる」というループの最中に，タイマ割込み
+  （線1）も定期的に割り込んで処理されている，と解釈するのが自然
+  （優先度上，SIO＝線2とTIMER＝線1は同じ内部優先度2のため互いに
+  ネストしないが，タイマは別に定期発火し続けている）。
+- `arch/riscv_gcc/esp32c6/esp32c6_usbjtag.c`のISR
+  （`esp32c6_usbjtag_isr_siop`）・送信関数（`esp32c6_usbjtag_snd_chr`）
+  に一時的なグローバルカウンタを仕込み（診断用．**リバート済み，
+  現在のツリーには残っていない**），クラッシュ後にJTAGで
+  `x/8xw &esp32c6_dbg_counters`を読んだところ**全カウンタが0**
+  だった。しかしバナー（数百文字）は同じ`esp32c6_usbjtag_snd_chr`
+  経路（`syssvc/serial.c`の`serial_snd_chr`→`sio_snd_chr`）を通って
+  実際に出力されている（シリアルキャプチャで確認済み）。
+  → **クラッシュ後のある時点で，カウンタを含むBSS領域の一部（또는
+  全体）が再ゼロ化されている**と考えられる。最有力の解釈は，
+  ワイルドジャンプの着地点が`arch/riscv_gcc/common/start.S`の
+  BSSクリアループ（またはそれに類似する処理）のアドレス範囲に
+  偶然重なり，完全なハードウェアリセットを経ずに部分的な
+  再初期化が起きている，というもの（ただしこの仮説はアドレス
+  レベルでは未検証＝start.Sのbssクリアループの実アドレスと
+  0x42033da0〜0x42036800を突き合わせていない）。
+
+### 除外できた仮説
+
+- **受信（OUT_RECV_PKT）割込みが引き金**：
+  `esp32c6_usbjtag_ena_cbr`のSIO_RDY_RCVケースを一時的に無効化して
+  再現テストしたが，**同じ箇所でクラッシュが再現した**＝受信パスは
+  無関係と判断できる。
+- **THRESH優先度のネスト処理のオフバイワン**：TIMER割込みとSIO割込みは
+  同じ内部優先度（2）のため，そもそも互いにネストできない設計になって
+  おり，かつバナー出力の間だけで数百回分のTIMER/SIO割込みが問題なく
+  処理されている（クラッシュが起きるのはロジック上「2回目のメッセージ」
+  の冒頭のみ）ことから，`irc_begin_int`/`irc_end_int`の基本ロジックの
+  単純なオフバイワンではないと考えられる（ただし完全には否定できない）。
+- **レジスタオフセットの取り違え**（USB Serial/JTAG・PLIC_MX・INTMTXの
+  各アドレス）：esp-hal-3rdpartyのヘッダと逐一突き合わせ済み・
+  milestone 1の実機ポーリング動作でも実証済みのため疑わしさは低い。
+
+### 有力な仮説（未検証・次に確認すべきこと）
+
+`arch/riscv_gcc/common/core_kernel_impl.c`の`default_int_handler`
+（**共有／未改変のコード**）は，未登録の割込みが発生すると
+`syslog_0`/`syslog_1`を呼んでから`ext_ker()`（カーネル終了）を呼ぶ。
+**もし何らかの理由でCPU割込み線1・2・3以外の線で割込みが発生して
+いれば**，このパスに入る。`intmtx_initialize()`は全77ソースの
+MAPレジスタを0に，全32 CPU線のENABLEを0に初期化しているため，
+理論上は線1〜3以外が発火するはずはないが，以下は未確認：
+
+1. `intmtx_initialize()`の全77ソースクリアが実際に実機で効いているか
+   （ROM/ブートローダが起動時に独自にルーティングした古いMAP設定が
+   残っていないか，レジスタ書込み自体が実機で有効か）。
+2. `default_int_handler`が実際に呼ばれているかどうか（"Unregistered
+   interrupt occurs."という文字列が出力されていれば直接の証拠になる
+   が，これまでのキャプチャでは見えていない＝出力される前に自身が
+   クラッシュしている可能性もある）。
+
+次のセッションでの推奨アプローチ：
+- `default_int_handler`（共有コードだが，一時的な診断計装は許容範囲）
+  の先頭に，ISRカウンタと同様のグローバルカウンタ＋呼ばれたintno値を
+  記録する処理を仕込み，クラッシュ後にJTAGの`monitor halt`＋
+  メモリ直接読出しで確認する（`continue`は使わない．今回確立した
+  「クラッシュさせてから安全にJTAG接続する」手順に従うこと）。
+- 上記のワイルドジャンプ先アドレス（`0x42033da0`〜`0x42036800`付近）
+  と，`arch/riscv_gcc/common/start.S`のbssクリアループの実アドレスを
+  `nm`／`objdump`で突き合わせ，本当に部分再初期化が起きているのかを
+  確認する。
+- 実機の`.text`終端（`0x42006310`）から`0x42033da0`まではまだ広い
+  ギャップがある（約180KB）。この間に何があるか（他のセクション・
+  リンカスクリプトの割付）を再確認する価値がある。
