@@ -973,3 +973,175 @@ passed."メッセージは出力されない仕様＝これは正常終了であ
 - **未着手のまま**：LPコアとの相互作用の確認（本セッションでも対象外
   ＝HPコアのみ）。線3の副次的な謎（前節）も引き続き未確認（`mie`
   修正後の再現有無は未検証）。
+
+## Phase A「正式ターゲット化」（同日・別セッション）：target_spec.yaml・testexec・QEMU確認
+
+C3ポートの`docs/porting/PORTING_GUIDE.md`に沿った新ターゲット移植プロセス
+（`target_spec.yaml`の作成・`testexec`実機実行・QEMU対応可否確認・
+`DIVERGENCE_MAP.md`／`docs/porting/IMPL_INDEX.md`更新）を実施した。
+
+### `target_spec.yaml`
+
+`target/esp32c6_gcc/target_spec.yaml`を新規作成した（`docs/porting/
+target_spec.yaml.template`を元に，実機診断で確認済みの値のみ記入．
+「実機未検証」等の推測混じりの記述はしていない）。なお，本リポジトリの
+既存ターゲット（esp32c3含む）はいずれも`target_spec.yaml`を持っておらず
+（`PORTING_GUIDE.md`の運用が本ファイル作成以降に確立されたため），
+ESP32-C6が最初の事例となる。
+
+### QEMU対応確認：Espressif版QEMUはesp32c6マシンを実装していない
+
+第1マイルストーンの調査時点で「C6用QEMUマシンの有無は未確認」として
+残っていた項目を確認した。本リポジトリにピン留め済みのEspressif版
+QEMU（`~/TOPPERS/ASP3CORE/tools/qemu-esp/qemu/bin/qemu-system-riscv32`，
+バージョン`9.2.2（esp_develop_9.2.2_20260417）`）で確認したところ：
+
+```
+$ qemu-system-riscv32 -M help
+Supported machines are:
+esp32c3              Espressif ESP32-C3 machine
+none                 empty machine
+opentitan            RISC-V Board compatible with OpenTitan
+sifive_e             RISC-V Board compatible with SiFive E SDK
+sifive_u             RISC-V Board compatible with SiFive U SDK
+spike                RISC-V Spike board (default)
+virt                 RISC-V VirtIO board
+```
+
+**`esp32c6`マシンは存在しない**（`esp32c3`のみ）。実際にビルド済み
+イメージで起動を試みても明確なエラーになる：
+
+```
+$ qemu-system-riscv32 -M esp32c6 -nographic -drive file=asp_flash.bin,if=mtd,format=raw -semihosting
+qemu-system-riscv32: unsupported machine type: "esp32c6"
+Use -machine help to list supported machines
+```
+
+（ビルド自体は`esp32c6-qemu`プリセットで問題なく成功する＝コード側の
+問題ではなく，QEMU側にesp32c6マシンの実装が存在しないことが原因）。
+
+**結論**：ESP32-C6は現状のツールチェーン（ピン留め済みEspressif版
+QEMU）では**QEMUでの動作確認・CI回帰が不可能＝実機専用ターゲット**
+である。したがって：
+- `test/porting`のQEMU実行は不可（実機のみで6/6 PASSを確認済み）。
+- `.github/workflows/ci.yml`への`esp32c6-qemu`ジョブ追加は**見送った**
+  （動かせない環境でジョブを追加する意味がないため）。将来Espressif
+  がQEMUにesp32c6マシンを追加した場合は，`esp32c3-qemu`ジョブを
+  雛形に追加を検討すること。
+
+### `testexec`実機結果：35/36 PASS（`int1`が唯一の失敗＝未解決issue）
+
+実機テストランナ`scripts/ci/run_board_esp32c6.py`を新規作成した
+（`run_board_esp32c3.py`と完全に同一構造，chip名のみ差替え）。
+C3の実機Phase A完了時と同じ36件のテストセット（`cpuexc1`〜`10`・
+`dlynse`・`dtq1`・`exttsk`・`flg1`・`hrt1`・`int1`・`mpf1`・`mutex1`〜
+`8`・`notify1`・`pdq1`・`raster1`〜`2`・`sem1`〜`2`・`suspend1`・
+`sysman1`・`sysstat1`・`task1`・`tmevt1`）を実機（`/dev/ttyACM1`）で
+実行した：
+
+```bash
+ESP32C6_TTY=/dev/ttyACM1 ESPTOOL=<esptoolのパス> \
+  python3 scripts/ci/run_testexec.py \
+  --options "--preset esp32c6" \
+  --run "ESP32C6_TTY=/dev/ttyACM1 ESPTOOL=<esptoolのパス> python3 $(pwd)/scripts/ci/run_board_esp32c6.py 90" \
+  --workdir build/testexec-esp32c6 \
+  cpuexc1 cpuexc2 ... task1 tmevt1
+```
+
+結果：**35/36 PASS**（`cpuexc10`は「対象外」でSKIP扱いPASS，`dlynse`
+含む）。**唯一の失敗＝`int1`**：
+
+```
+Check point 1 passed.
+## Unexpected check point 4.
+```
+
+#### `int1`失敗の原因調査（新規の実機固有issue．未解決のまま記録）
+
+`test_int1.c`は，`task1`が`ras_int(INTNO1)`で割込みを要求した直後に
+`ISR2`→`ISR1`が実行されチェックポイント2,3を経てから`task1`が
+チェックポイント4へ進むことを期待する。実機ではチェックポイント1の
+直後にいきなりチェックポイント4に到達しており，**`ras_int(INTNO1)`
+はE_OKを返すものの，対応するISR（`isr1`/`isr2`）が一度も呼ばれて
+いない＝ソフトウェア割込み要求がCPUへ実際に配送されていない**。
+
+本ポートの`INTNO1`は，前々節「線3固有の書込み拒否」で報告した
+CPU割込み線3（`FROM_CPU_1`ソース）に割り当てている。この失敗が
+「線3固有」の問題なのか，より一般的な問題なのかを切り分けるため，
+`target_test.h`／`target_kernel_impl.c`を一時的に書き換えて以下を
+実機で確認した（いずれも実験後は元の設定＝線3・`FROM_CPU_1`に
+リバート済み。`git diff HEAD`で確認済み）：
+
+| 実験 | ソース | 宛先CPU割込み線 | 結果 |
+|---|---|---|---|
+| 元の設定 | `FROM_CPU_1` | 線3 | **失敗**（チェックポイント1→4） |
+| 実験1 | `FROM_CPU_1` | 線4 | **失敗**（同上，線を変えても再現） |
+| 実験2 | `FROM_CPU_2` | 線3 | **失敗**（同上，ソースを変えても再現） |
+
+すなわち，**特定の線・特定のFROM_CPUソースの組合せに固有の問題では
+なく，「CFG_INTで3番目に登録される割込み要求ライン」が一貫して
+実機で配送されないという，より一般的な問題**であることを確認した
+（前々節で報告した「PLICMX_PRI[3]・ENABLEのbit3への直接強制書込みが
+即座の読返しでも反映されない」という観察と整合する＝ソフトウェアの
+書換えでは解決しない，ハードウェア側の制限である可能性が高い）。
+
+**新たに判明した重要なリスク**：`target_timer.h`の
+`target_hrt_set_event()`は，SYSTIMERコンパレータの設定完了時点で
+既に目標時刻を過ぎていた場合のみ，`target_timer_force_int()`
+（`FROM_CPU_0`を線1へ多重アサートするフォールバック経路）を使う。
+これは`SYSTIMER_TARGET0`（線1の主ソースであり，これまでの全ての
+成功していたテストで実際に使われてきた経路）とは**別の，これまで
+一度も実機で検証できていない経路**である。上記の調査により
+「CFG_INT登録順3番目以降」に問題があることが分かったが，
+`FROM_CPU_0`は線1のCFG_INT登録の一部（1番目のTIMERエントリに
+紐づく）であるため直接は影響を受けないと推測されるものの，
+**`FROM_CPU_x`系のソフトウェア割込み要求機構全般に何らかの共通の
+問題がある可能性も排除できていない**。今後，`target_hrt_set_event`
+のこの分岐で実際にハングやタイムイベント消失が疑われた場合は，
+真っ先にこのissueを疑うこと。
+
+**次のセッションへの申し送り**：
+1. CFG_INTの登録順（`intinib_table`のインデックス）と実機での
+   配送成否の対応関係をさらに検証する（例：`test_int1.cfg`の
+   CFG_INT登録順を変更し，INTNO1を1番目または2番目にした場合に
+   配送されるかを確認すれば，「インデックス依存」説と「線固有」説を
+   完全に切り分けられる）。
+2. `PLIC_MXINT_CONF_REG`（`0x200013FC`．前々節でsleep-retention専用と
+   判断したが未確定）に加え，esp-hal-3rdpartyの`riscv/interrupt_plic.c`
+   がCFG_INT登録数が3件以上になる場合に何か特別な初期化を行って
+   いないか再確認する。
+3. 上記1・2で原因が特定できない場合は，実機JTAG（本ドキュメント
+   前半に記載のCPUTAPID修正・halt-after-crash手法）でPLICMX関連
+   レジスタの全ビットを`monitor halt`後に読み出し，ソフトウェアからの
+   書込みでは見えない実機固有の挙動がないか確認する。
+
+### ドキュメント整備
+
+- `DIVERGENCE_MAP.md`：`arch/riscv_gcc/esp32c6/`・`target/esp32c6_gcc/`
+  のエントリを追加（esp32c3のエントリに準拠．QEMU未対応・実機
+  160MHz・test_porting 6/6・testexec 35/36を明記）。
+- `docs/porting/IMPL_INDEX.md`：ESP32-C6の割込みマトリクス制御
+  （int1 issueの注記付き）・Direct Boot起動・SYSTIMER HRT・
+  USB Serial/JTAGコンソール・実機テストランナの各行を追加
+  （esp32c3の対応行に準拠）。
+- `docs/dev/README.md`：索引表のESP32-C6行を「Phase A完了」に更新
+  （test_porting 6/6・testexec 35/36・int1 issue・QEMU未対応の要旨）。
+
+### まとめ（本セッション終了時点）
+
+- **完了**：`target_spec.yaml`作成・`DIVERGENCE_MAP.md`／
+  `IMPL_INDEX.md`更新・実機テストランナ（`run_board_esp32c6.py`）
+  新規作成・testexec実機実行（35/36 PASS）。
+- **確定した事実**：Espressif版QEMU（本リポジトリピン留め版）は
+  esp32c6マシンを実装していない＝実機専用ターゲット。CIジョブ追加は
+  見送り（正しい判断＝動かない環境にジョブを追加しない）。
+- **新規に発見・記録した未解決issue**：CFG_INTの3エントリ目以降が
+  実機で配送されない（`int1`テスト失敗）。線・ソースの組合せを
+  変えても再現する一般的な問題であることを確認済み。ハードウェア
+  側の制限の可能性が高いが未確定。`target_timer_force_int()`
+  （SYSTIMERの稀なフォールバック経路）も同じ問題の影響を受ける
+  可能性があり未検証＝将来のハング調査で真っ先に疑うべき候補として
+  記録した。
+- 上記issueを除き，C3ポートと同等の「Phase A完了」水準
+  （起動・クロック・割込み・タイミングの中核機能はすべて実機検証
+  済み）に到達した。

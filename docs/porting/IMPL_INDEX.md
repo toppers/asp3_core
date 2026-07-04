@@ -18,6 +18,7 @@
 | RISC-V トラップエントリ | `riscv_gcc/common` | `core_support.S`・`polarfire_soc/chip_support.S` | mtvecベクタ＋mcause判定 |
 | RISC-V PLIC割込み制御 | `riscv_gcc/common` | `plic_kernel_impl.[ch]`・`polarfire_soc/chip_support.S` | claim/complete・閾値マスク |
 | ESP32-C3割込みマトリクス制御 | `riscv_gcc/esp32c3` | `intmtx_kernel_impl.h`・`chip_support.S` | ソースMAP・THRESHソフト昇格（ネスト）・FROM_CPUでras_int |
+| ESP32-C6割込みマトリクス制御 | `riscv_gcc/esp32c6` | `intmtx_kernel_impl.h`・`chip_support.S` | C3と同一方式だがソースルーティング（INTMTX_BASE）とCPU割込み線制御（Espressif呼称"PLIC"＝PLIC_MX_BASE）が別アドレス空間．**既知の未解決issue**：CFG_INTの3エントリ目以降（本ポートのras_int用INTNO1）が実機で配送されない（線・ソースを変えても再現．testexec int1が失敗．docs/dev/esp32c6-target.md参照） |
 | RISC-V Machine Timer | `riscv_gcc/common` | `mtimer.[ch]` | CLINT mtime/mtimecmp（MTIはローカル割込み） |
 
 ---
@@ -51,6 +52,10 @@
 | QEMU esp32c3実行（Espressif fork） | `esp32c3_gcc` | `target.cmake`・`run.cmake` | フラッシュイメージ（-drive if=mtd）起動・objcopyポストビルド・RV32セミホスティング終了 |
 | USB Serial/JTAGコンソール | `riscv_gcc/esp32c3` | `esp32c3_usbjtag.[ch]`・`chip_serial.c` | ネイティブUSBボード用SIO（/dev/ttyACM*直結・ホスト未接続時は出力破棄） |
 | ESP32-C3実機テストランナ | `scripts/ci` | `run_board_esp32c3.py` | esptool書込み→RTSリセット→マーカ待ちキャプチャ（pyserial） |
+| ESP32-C6起動（Direct Boot） | `esp32c6_gcc` | `flash_header.S`・`esp32c6.ld` | C3と同じマジック方式．IROM/DROM分離なし＝C3より単純なリンカスクリプト |
+| SYSTIMERによるHRT（ESP32-C6） | `esp32c6_gcc` | `target_timer.[ch]` | C3と同一方式（16MHz固定・52bit・oneshotコンパレータ）．PCRクロック切替はROM設定済みのため不要（`hardware_init_hook`は一切のPCR書換えを行わない） |
+| USB Serial/JTAGコンソール（ESP32-C6） | `riscv_gcc/esp32c6` | `esp32c6_usbjtag.[ch]`・`chip_serial.c` | C3と同一パターン（ベースアドレスのみ相違） |
+| ESP32-C6実機テストランナ | `scripts/ci` | `run_board_esp32c6.py` | C3版と同一構造（chip名のみ差替え） |
 | Flexcomm USART（i.MX RT600） | `arch/arm_m_gcc/imxrt600` | `imxrt600_usart.[ch]`・`chip_serial.c` | 非TECS SIO（FRG分周＋FIFOTRIG割込み） |
 | CTimerによるHRTタイマ | `mimxrt685evk_gcc` | `target_timer.c`・`target_timer.h` | 1MHzプリスケーラ＋MR0マッチ割込み（32bitアップカウンタ） |
 | XIP実行（FlexSPI設定ブロック） | `mimxrt685evk_gcc` | `flash_config.c`・`mimxrt685.ld`・`target_kernel.py` | `.flash_conf`@0x400・ベクタ9=イメージタイプ(bit14)・ベクタテーブル@0x1000 |

@@ -1,0 +1,168 @@
+# ==============================================================
+# TOPPERS/ASP3 Core — ターゲットハードウェア記述
+# target_spec.yaml（ESP32-C6，Phase A完了後に記入）
+#
+# 本ファイルはPORTING_GUIDE.md Step 0-1の成果物。ESP32-C6は移植
+# 完了後（実機でtest_porting 6/6・testexec 35/36を確認した後）に
+# 事後記入した。値はすべて実機診断・データシート（esp-hal-3rdparty
+# のレジスタヘッダ）で検証済み。詳細な経緯はdocs/dev/esp32c6-target.md
+# を参照。
+# ==============================================================
+
+# --------------------------------------------------------------
+# ターゲット基本情報
+# --------------------------------------------------------------
+target:
+  name: "esp32c6_gcc"
+  display_name: "ESP32-C6 (RISC-V RV32IMC, USB Serial/JTAG)"
+  vendor: "espressif"
+  chip: "ESP32-C6FH4"
+  board: "ESP32-C6-DevKit相当（rev v0.2実機で検証．汎用ネイティブUSBボード）"
+  sdk: "bare"              # ESP-IDF非依存のベアメタル移植（Direct Boot）
+
+# --------------------------------------------------------------
+# アーキテクチャ
+# --------------------------------------------------------------
+architecture:
+  isa: "riscv32"
+  core: "espressif-riscv (RV32IMC_Zicsr_Zifencei，独自の簡略化割込み方式)"
+  endian: little
+
+  fpu: false
+  fpu_type: ""
+  mpu: false
+  trustzone: false
+
+  nvic_prio_bits: 0         # 該当なし（RISC-V）
+  num_irq: 0                # 該当なし（RISC-V）
+
+  el_boot: 0                # 該当なし（ARM A-profileではない）
+  has_vbar: false
+  gic_version: 0
+  gic_dist_base: 0x0
+  gic_rdist_base: 0x0
+  gic_cpu_base: 0x0
+
+  # RISC-V 固有
+  misa: "rv32imc_zicsr_zifencei"
+  plic_base: 0x0            # 標準PLICではない（下記reference参照）
+  clint_base: 0x0            # CLINT非使用（SYSTIMERで代替）
+
+# --------------------------------------------------------------
+# メモリマップ
+# --------------------------------------------------------------
+memory:
+  flash:
+    start: 0x42000000        # Direct Boot XIP（IROM=DROM，C3と異なりIROM/DROM分離なし）
+    size: 0x400000            # 4MB
+
+  sram:
+    start: 0x40800000
+    size: 0x70000             # 448KB（512KB中，ROMブートローダ作業領域を避けて制限）
+
+  extra_sram: []
+
+  vector_table: 0x42000000    # flash_header.S（Direct Bootマジック）直後
+  stack_top: 0x0              # SRAM末尾を自動計算
+
+  kernel_data:
+    start: 0x0                 # SRAMと同じ
+    size: 0x0                  # 全SRAM
+
+# --------------------------------------------------------------
+# クロック
+# --------------------------------------------------------------
+clock:
+  system_hz: 160000000        # 実機診断・壁時計実測で確認済み（160MHz）
+  peripheral_hz: 0
+  notes: >
+    ROMブートローダがDirect Boot到達前に既にPCR_SYSCLK_CONF（SOC_CLK_SEL=
+    SPLL）・PCR_CPU_FREQ_CONFを設定済み＝480MHz(SPLL固定)÷3÷1＝160MHz。
+    ソフトウェアによるPLL起動・regi2c較正は不要かつ実施していない
+    （C3のBBPLLがSPI_FAST_FLASH_BOOT経路でROMにより既に有効化されている
+    のと同じパターン）。詳細はdocs/dev/esp32c6-target.md「解決：PCR
+    クロック切替とSYSTIMER較正」を参照。
+
+# --------------------------------------------------------------
+# tick タイマー
+# --------------------------------------------------------------
+tick_timer:
+  type: "custom"              # SYSTIMER（tickレスHRT，カーネルtickは使用しない）
+  peripheral: "SYSTIMER unit0/target0"
+  base_address: 0x6000A000
+  source_hz: 16000000          # XTAL 40MHz÷2.5＝16MHz固定（CPU_CLKとは独立したクロックドメイン）
+  tick_hz: 1000                # 参考値（ASP3はtickレスHRT）
+  irq_num: 1                   # CPU割込み線1（SYSTIMER_TARGET0＋FROM_CPU_0を多重マップ）
+  irq_priority: 2              # 内部表現（INT_IPM(-2)=2．TIMER/SIOと同一優先度）
+
+  hrt_type: "custom"           # SYSTIMER 52bitカウンタ・oneshotコンパレータ
+  hrt_freq_hz: 16000000
+
+# --------------------------------------------------------------
+# シリアル出力
+# --------------------------------------------------------------
+serial:
+  type: "usb_cdc"              # USB Serial/JTAG（ネイティブUSBボード．/dev/ttyACM*直結）
+                                # UART配線ボードは ESP32C6_CONSOLE=uart0 でUART0に切替可
+  peripheral: "USB Serial/JTAG controller"
+  base_address: 0x6000F000
+  tx_pin: -1
+  rx_pin: -1
+  baud: 115200
+  clock_hz: 0
+  irq_num: 2                   # CPU割込み線2（USB_SERIAL_JTAG，代替でUART0も同じ線）
+  irq_priority: 2              # 内部表現（INT_IPM(-2)=2）
+
+# --------------------------------------------------------------
+# 参照実装
+# --------------------------------------------------------------
+reference:
+  closest_target: "esp32c3_gcc"
+  arch_dir: "riscv_gcc"
+  context_switch_ref: "arch/riscv_gcc/common/core_support.S"
+  notes: >
+    esp32c3_gccを雛形に作成（Direct Boot・INTMTX類似の割込みマトリクス・
+    SYSTIMER・USB Serial/JTAGコンソールとも同一パターン）。C6独自の相違点：
+    (1) IROM/DROM分離なし＝リンカスクリプトがC3よりも単純。
+    (2) 割込みコントローラがソースルーティング（INTMTX_BASE=0x60010000）と
+        CPU割込み線制御（Espressif呼称"PLIC"だがC3のINTMTX CPU側と同一方式．
+        PLIC_MX_BASE=0x20001000）で別アドレス空間に分離（C3は単一アドレス
+        空間に同居）。ペリフェラルソースは77本（C3は62本）。
+    (3) クロック制御がSYSTEM_*レジスタからPCRペリフェラルへ移動（ただし
+        実際にはROMが既に設定済みでソフトウェア側の追加操作は不要，上記
+        clock.notes参照）。
+    (4) mie CSRは実機で正常にアクセス可能（C3は不正命令例外になる
+        という前提だったが，C6では未検証のまま踏襲した結果，
+        Phase A中盤で重大なバグの原因となった＝下記ai_notes参照）。
+
+# --------------------------------------------------------------
+# AIへの補足指示
+# --------------------------------------------------------------
+ai_notes: |
+  - 【最重要・既知の未解決issue】CPU割込み線の3本目以降（PLICMX_ENABLE・
+    PLICMX_PRIレジスタの3番目以降のエントリに相当）が実機で機能しない。
+    CFG_INTで2つ（TIMER=線1・SIO=線2）まで登録した状態は正常に動作す
+    るが，3つ目のCFG_INTエントリ（本ポートではras_int用のテスト割込み
+    INTNO1）は，どの物理CPU割込み線（線3・線4で確認済み）・どの
+    FROM_CPUソース（FROM_CPU_1・FROM_CPU_2で確認済み）の組合せでも
+    一貫して割込み配送が発生しない（`ras_int`はE_OKを返すが，ISRが
+    一度も呼ばれない＝testexecの`int1`テストが必ず失敗する。ソース
+    レベルのステータス（INTMTX_STATUS0）は正しくアサートすることを
+    確認済みで，かつPLICMX_ENABLE／PLICMX_PRIレジスタへの直接強制
+    書込みも実機では反映されない＝ソフトウェアバグというより実機
+    固有の制限の可能性が高い．未解決．詳細はdocs/dev/esp32c6-target.md
+    「testexec実機結果：35/36 PASS」の節を参照）。
+  - 上記の影響で，`target_timer.h`の`target_hrt_set_event`が使う
+    `target_timer_force_int()`（FROM_CPU_0を線1へ多重マップして強制
+    発火させるフォールバックパス．SYSTIMERコンパレータ設定時点で
+    既に目標時刻を過ぎていた場合のみ使われる稀なエッジケース）も，
+    これまで一度も実機で検証できていない（35個の他のテストでは
+    このパスに到達していない可能性が高い）。将来的にこの経路で
+    ハングやタイムイベント消失が疑われた場合は，最初にこのissueを
+    疑うこと。
+  - QEMU：本リポジトリにピン留め済みのEspressif版QEMU（`tools/qemu-esp`，
+    バージョン9.2.2）は`esp32c6`マシンを実装していない（`-M help`で
+    確認．`esp32c3`のみサポート）。したがってesp32c6ターゲットは
+    QEMUでの動作確認・CI回帰ができず，実機（実機テストランナ
+    `scripts/ci/run_board_esp32c6.py`）でのみ検証可能。CIジョブは
+    追加していない（QEMUが動かないため）。
