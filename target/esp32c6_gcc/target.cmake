@@ -61,14 +61,6 @@ list(APPEND ASP3_COMPILE_DEFS
     USE_TIM_AS_HRT
 )
 
-#
-#  診断用（一時的．logtaskクラッシュ調査．docs/dev/esp32c6-target.md参照）
-#
-option(ESP32C6_DIAG_EXC_DUMP "Enable temporary CPU exception raw register dump (diagnostic)" OFF)
-if(ESP32C6_DIAG_EXC_DUMP)
-    list(APPEND ASP3_COMPILE_DEFS ESP32C6_DIAG_EXC_DUMP)
-endif()
-
 if(ESP32C6_QEMU)
     list(APPEND ASP3_COMPILE_DEFS TOPPERS_USE_QEMU)
 endif()

@@ -117,13 +117,22 @@ chip_initialize(void)
 	 */
 	intmtx_initialize();
 
-#ifdef TOPPERS_USE_QEMU
 	/*
-	 *  mieのCPU割込み線ビット（1〜31）をすべて許可する（QEMUのみ．
-	 *  C6用QEMUマシンの有無は未確認．C3と同じ構造を踏襲しておく）．
+	 *  mie CSRのCPU割込み線ビットをすべて許可する
+	 *
+	 *  【重要な訂正】esp32c6.h冒頭のコメント（C3からの類推）は「mie/mip
+	 *  へのアクセスは不正命令になる」としていたが，これは実機未検証の
+	 *  誤った仮定だった。実機（ESP32-C6FH4 rev v0.2）で`csrr mie`を
+	 *  実際に発行して確認したところ，不正命令例外にはならず正常に
+	 *  読み出せる（値は0＝リセット直後は全ビット無効）。この結果，
+	 *  PLIC_MX側（ENABLE／PRI／THRESH／EIP）をどれだけ正しく設定しても，
+	 *  標準RISC-VのCSRであるmie側が全ビット0のままではCPUは一切
+	 *  外部割込みトラップを起こさない，というのが
+	 *  「TIMER・SIOとも実機でCPUへの割込み配送が一度も成立しない」
+	 *  現象の真因だった（詳細はdocs/dev/esp32c6-target.md参照）。
+	 *  QEMU限定だった従来のコードを実機でも有効にする。
 	 */
 	Asm("csrw mie, %0" : : "r"(~0U));
-#endif /* TOPPERS_USE_QEMU */
 
 	/*
 	 *  コア依存の初期化

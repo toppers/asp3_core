@@ -43,13 +43,20 @@
 #define TOPPERS_BOOT_HARTID    0
 
 /*
- *  実機のESP32-C3はmie/mip CSRを実装しない（アクセスすると不正命令
- *  例外）ため，共通部start.Sでのクリアを抑止していた．C6も同一の
- *  RISC-Vコア実装系統と見て同じ前提を踏襲するが，実際に割込みを
- *  発生させて確認するまでは未検証（Phase A本マイルストーンで
- *  SYSTIMER割込みにより検証する）．
+ *  【重要な訂正】ESP32-C3はmie/mip CSRを実装しない（アクセスすると
+ *  不正命令例外）ため，C6も同一系統と類推してTOPPERS_OMIT_MIE_INITを
+ *  定義し，共通部start.Sでのクリアを抑止していた．しかし実機
+ *  （ESP32-C6FH4 rev v0.2）で`csrr mie`を実際に発行して確認したところ，
+ *  不正命令にはならず正常に読み出せる（リセット直後は0＝全ビット
+ *  無効）ことを確認した．この誤った類推が，logtaskクラッシュ調査
+ *  （docs/dev/esp32c6-target.md）で判明した「PLIC_MX側のENABLE／PRI／
+ *  THRESH／EIPをどれだけ正しく設定してもCPUが一切外部割込みトラップを
+ *  起こさない」現象の真因である（標準RISC-VのCSRであるmieが全ビット
+ *  0のまま＝CPU自体が割込みを受け付けない状態だった）．
+ *  そのためTOPPERS_OMIT_MIE_INITはC6では定義しない（start.Sの
+ *  mie/mipクリアを有効化．chip_kernel_impl.cのchip_initialize()で
+ *  改めてmie=~0を設定する）．
  */
-#define TOPPERS_OMIT_MIE_INIT
 
 /*
  *  デフォルトの非タスクコンテキスト用のスタック領域の定義
