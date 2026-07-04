@@ -74,15 +74,17 @@ hardware_init_hook(void)
 	sil_wrw_mem((void *)ESP32C6_RTC_CNTL_SWD_WPROTECT, 0U);
 
 	/*
-	 *  CPUクロックはリセット既定のまま（未実施）
+	 *  CPUクロックの切替えは不要（実機診断により判明）
 	 *
-	 *  C3はSYSTEM_CPU_PER_CONF/SYSCLK_CONFの単純な2bit選択でPLL
-	 *  160MHzへ切り替えられたが，C6のクロック制御はPCRペリフェラルに
-	 *  移動しており，SPLL自体の起動シーケンス含め構造が異なる
-	 *  （esp32c6.hのPCR_*定義・docs/dev/esp32c6-target.md参照）．
-	 *  誤ったレジスタ操作はハング等のリスクがあるため，実機での
-	 *  シーケンス検証ができるまではリセット既定クロックのまま動作
-	 *  させる（CORE_CLK_MHZ=40＝XTAL相当．SIL_DLY_TIM1/2も暫定値）．
+	 *  当初はC3同様にPCR経由でSPLLへ明示的に切り替えるソフトウェア
+	 *  操作が必要と想定していたが，実機診断（PCR_SYSCLK_CONF／
+	 *  PCR_CPU_FREQ_CONFの読出し＋壁時計を用いた実測）の結果，ROM
+	 *  ブートローダがDirect Boot到達前に既にSOC_CLK_SEL=SPLL・
+	 *  分周比480MHz÷3÷1＝160MHzへ設定済みであることを確認した
+	 *  （C3のBBPLLと同様，SPI_FAST_FLASH_BOOT経路でROMが既に有効化・
+	 *  設定したものを流用しており，追加のレジスタ操作は不要かつ
+	 *  行うべきでない）．CORE_CLK_MHZ＝160・SIL_DLY_TIM1/2は実測較正
+	 *  済み（esp32c6.h・docs/dev/esp32c6-target.md参照）．
 	 */
 }
 

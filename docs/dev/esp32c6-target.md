@@ -808,3 +808,168 @@ ESP32-C3の時と同じ「Phase A完了」の基準を満たした。
   （`PLICMX_PRI[3]`・`ENABLE`のbit3）への書込みが`mie`修正前の診断で
   直後の読返しでも反映されなかった現象。`mie`修正後に再現するかは
   未確認。
+
+## 解決（同日・別セッション）：PCRクロック切替とSYSTIMER較正
+
+C3port同等の「Phase A完了」基準（160MHz実機動作・`SIL_DLY_TIM1/2`
+較正済み・`dlynse`相当テストPASS）を満たすため，残っていたPCR
+クロック切替とSYSTIMER精度較正を実施した。
+
+### 重要な発見：PCRクロック切替の実装は不要だった
+
+当初はESP-IDFの参照実装（`asp3_esp_idf/hal/components/esp_hw_support/
+port/esp32c6/rtc_clk.c`ほか）を元に，analog BBPLLのregi2c較正
+シーケンス（`regi2c_ctrl_ll_bbpll_calibration_start/stop/is_done`・
+`clk_ll_bbpll_set_config`等，MODEM_LPCONのI2Cマスタクロック有効化＋
+PMU ICGマップの事前設定を含む，見積りで450行超）を移植する前提で
+調査を進めた。しかし，**この調査の途中で，実機の`PCR_SYSCLK_CONF`
+（`0x60096110`）・`PCR_CPU_FREQ_CONF`（`0x60096118`）を安全な読出し
+専用の診断（一時的に`software_init_hook`へ計装．`ESP32C6_DIAG_CLK`
+ビルドオプション．すでにリバート済み）で確認したところ**：
+
+```
+[CLKDIAG] modem_lpcon_clk_conf=00000000 pcr_sysclk_conf=28010200
+          pcr_cpu_freq_conf=00000000 i2c_ana_mst_conf2=00000000
+```
+
+- `pcr_sysclk_conf=0x28010200`：bit[17:16]=`SOC_CLK_SEL`＝**1（SPLL）**，
+  bit[15:8]=`HS_DIV_NUM`＝2（clk_hprootはSPLLの÷3固定），
+  bit[30:24]=`CLK_XTAL_FREQ`＝40（40MHz，想定通り）。
+- `pcr_cpu_freq_conf=0x00000000`：`CPU_HS_DIV_NUM`＝0（clk_cpuは
+  clk_hprootの÷1）。
+
+すなわち，**ROMブートローダがDirect Boot到達前に既にSOC_CLK_SEL=SPLL・
+480MHz÷3÷1＝160MHzへ設定済み**であることが判明した（C3のBBPLLが
+`SPI_FAST_FLASH_BOOT`経路でROMにより既に有効化されているのと全く
+同じパターン）。`modem_lpcon_clk_conf=0`（I2Cマスタクロック無効）
+であることから，起動後にソフトウェアが独自にBBPLLを再較正した形跡は
+なく，**ROM自身がBBPLLの電源投入・regi2c較正を済ませ，その出力を
+PCR経由でCPUに供給する配線だけを行った状態でDirect Bootへジャンプ
+している**と解釈できる。
+
+この読出しだけでは「レジスタの値がそう見えるだけで実際のCPU動作
+クロックは別」という可能性も残るため，**壁時計を用いた実測**で
+二重に検証した：
+
+1. 4,000万回の空ループ（`volatile`変数のインクリメント＋比較，
+   コンパイラによる最適化除去なし．ディスアセンブルで確認）の
+   壁時計時間をホスト側（pyserial，マーカー到達タイムスタンプ）で
+   計測：**1.7098秒**→23.39M回/秒。ループ本体は`lw/addi/sw/lw/bgeu`
+   の5命令（依存ロード×2を含む）で，160MHz説（約6.8サイクル/回）に
+   整合し，40MHz説（1回あたり1.7サイクル未満を要求＝物理的に不可能）
+   とは矛盾する。
+2. `sil_dly_nse(1,000,000,000)`（1秒要求）を較正前の暫定値
+   （TIM1=100,TIM2=100，40MHz仮定で設計された値）のまま実行し，
+   実測184.6ms（壁時計）だったことからループ1回あたりの実コストを
+   逆算：約18.38ns/回＝160MHzで約2.9〜3サイクル/回に相当（40MHzでは
+   1サイクル未満になり物理的に不可能）。
+
+以上2つの独立した実測により，**CPUは起動直後から一貫して160MHzで
+動作している**ことを確定させた。したがって，**analog PLLの起動・
+較正コードを新規に書く必要はなく**（すでに実施済みのものを流用する
+だけで足りる），`hardware_init_hook()`は一切のPCRレジスタ書換えを
+行わない（書き換えると，ROMが設定した既に正しい状態を壊すリスクが
+あるだけで得るものがない）。これは，最初の見積りで「アナログPLL
+較正はリスクが高い」と判断したことと矛盾しないが，**そのリスクの
+高い操作自体が実は不要だった**という結論になる。
+
+### `sil_dly_nse`の較正
+
+上記の壁時計実測を用いて，`SIL_DLY_TIM1`／`SIL_DLY_TIM2`（`sil_dly_nse`
+のループ較正定数．`arch/riscv_gcc/common/core_support.S`参照：
+`a0 -= TIM1; if (a0>0) { do { a0 -= TIM2; } while(a0>0); }`という
+実装）を反復的に実機較正した：
+
+| 試行 | TIM1 | TIM2 | `sil_dly_nse(1e9)`実測（要求1000ms） | 誤差 |
+|---|---|---|---|---|
+| 較正前（暫定値） | 100 | 100 | 184.6 ms | −81.5% |
+| 比例外挿（誤り） | 30 | 18 | 693.5 ms | −30.6% |
+| 反復1 | 30 | 12 | 1038.5 ms | +3.9% |
+| 反復2 | 30 | 13 | 962.5 ms | −3.8% |
+
+比例外挿（TIM2を「1ループの実測ns」にそのまま丸めるだけの単純な
+方法）が大きく外れた理由は，TIM2の即値が小さいほどRISC-V圧縮命令
+（RVC）にエンコードされる等，命令列自体が変化しループの実行コスト
+（命令フェッチ幅・整列等）に影響する余地があるためと考えられる
+（詳細な命令レベルの原因分析は未実施）。反復的な実機較正で収束させ，
+**TIM2=12を採用**（周辺機器ドライバのリトライ待ち用途であり，
+過少より過多の方が安全なため，やや長め側の値を選んだ）。TIM1は
+比例外挿値の30のまま採用（通常の呼出しではTIM2由来のループ時間が
+支配的で影響が小さいため，厳密な単独較正は行っていない）。
+
+最終値：`CORE_CLK_MHZ=160`・`SIL_DLY_TIM1=30`・`SIL_DLY_TIM2=12`
+（`arch/riscv_gcc/esp32c6/esp32c6.h`）。
+
+### SYSTIMER（HRT）の較正確認
+
+SYSTIMERはCPU_CLKとは独立したクロックドメイン（esp-hal-3rdparty
+`hal/esp32c6/include/hal/systimer_ll.h`の`systimer_ll_set_clock_source`
+＝`PCR.systimer_func_clk_conf.systimer_func_clk_sel`でXTAL／RC_FASTを
+選択．CPU_CLKの分周とは無関係）であることをヘッダで確認したうえで，
+実機でSYSTIMERの生カウンタを壁時計と突き合わせて実測した（1億回の
+空ループの前後でカウンタ差分を取得）：
+
+```
+SYSTIMER delta ticks = 70005446（壁時計4.3689秒に対応）
+implied SYSTIMER ticks/us = 16.024
+```
+
+既存の`ESP32C6_SYSTIMER_TICKS_PER_US=16`と0.15%以内で一致＝
+**変更不要，既に正しく較正されていたことを実機確認した**。
+
+### `test/porting`（6/6）・`test_dlynse`実機再検証
+
+上記較正後，フルクリーンビルドで再検証した：
+
+```bash
+# test_porting（6/6，前回セッションからの再検証）
+rm -rf build/test_porting-esp32c6
+cmake --preset esp32c6 -B build/test_porting-esp32c6 \
+  -DASP3_APPLDIR=test/porting -DASP3_APPLNAME=test_porting \
+  -DASP3_EXTRA_APP_C_FILES=test/porting/tap.c -DESP32C6_PORT=/dev/ttyACM1
+cmake --build build/test_porting-esp32c6
+# → # 6/6 passed（再確認）
+
+# test_dlynse（sil_dly_nse較正の正式テスト．tecsgen.cfgの
+# INCLUDE解決はtest_porting.cfg等と同じ仕組みで問題なく動作した）
+cmake --preset esp32c6 -B build/test_dlynse-esp32c6 \
+  -DASP3_APPLDIR=test -DASP3_APPLNAME=test_dlynse \
+  -DASP3_EXTRA_APP_C_FILES="syssvc/test_svc.c;syssvc/histogram.c" \
+  -DESP32C6_PORT=/dev/ttyACM1
+cmake --build build/test_dlynse-esp32c6
+```
+
+`test_dlynse`実機結果（全17ケース中17ケースとも"OK"＝実測遅延が
+要求値以上）：
+
+```
+sil_dly_nse(0): 43 OK
+sil_dly_nse(30): 43 OK
+sil_dly_nse(42): 81 OK
+... （中略，全て OK）
+sil_dly_nse(630): 693 OK
+-- for checking boundary conditions --
+sil_dly_nse(31): 81 OK
+sil_dly_nse(43): 93 OK
+sil_dly_nse(55): 106 OK
+```
+
+（この後，`check_finish(0)`→`test_finish()`→`ext_ker()`により
+プログラムが静かに終了する．`count=0`のため"All check points
+passed."メッセージは出力されない仕様＝これは正常終了であり
+ハングではない．`syssvc/test_svc.c`の`check_finish`実装を確認済み）。
+
+### まとめ（PCR/SYSTIMER較正セッション終了時点）
+
+- **CPUクロック**：160MHz実機動作を確認（ROMが既に設定済み．
+  ソフトウェアによる追加のPLL起動・regi2c較正コードは**不要かつ
+  実施していない**）。
+- **`SIL_DLY_TIM1/2`**：30／12に実機較正済み（`test_dlynse`全17ケース
+  OK）。
+- **SYSTIMER**：既存の`TICKS_PER_US=16`が実機実測（16.024）と0.15%
+  以内で一致，較正済みと確認。
+- **`test/porting`**：6/6 PASS（160MHz動作下で再確認）。
+- これでC3ポートと同等の「Phase A完了」基準を満たした。
+- **未着手のまま**：LPコアとの相互作用の確認（本セッションでも対象外
+  ＝HPコアのみ）。線3の副次的な謎（前節）も引き続き未確認（`mie`
+  修正後の再現有無は未検証）。

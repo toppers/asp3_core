@@ -58,18 +58,40 @@
 /*
  *  CPUクロック周波数（MHz．core_syssvc.hの性能カウンタ換算等で使用）
  *
- *  本マイルストーンではリセット既定クロックのまま動作確認した
- *  （PCR経由のPLL切替は未実施．周波数未計測につき，ひとまずXTAL
- *  そのまま＝40MHzと仮定．dlynse較正は別途実施）．
+ *  【訂正】実機診断の結果，PCR_SYSCLK_CONF（`0x60096110`）はROM
+ *  ブートローダによって起動時点で既にSOC_CLK_SEL=1（SPLL）・
+ *  HS_DIV_NUM=2（÷3）に設定されており，PCR_CPU_FREQ_CONF
+ *  （`0x60096118`）のCPU_HS_DIV_NUMも0（÷1）であることを確認した＝
+ *  CPUは起動直後から既に480MHz(SPLL固定)÷3÷1＝**160MHz**で動作して
+ *  いる（C3のBBPLLと同様，ROMがSPI_FAST_FLASH_BOOT経路で既に有効化・
+ *  設定済みのものを流用しており，ソフトウェアによる追加のPLL起動
+ *  シーケンス・regi2c較正は不要）。実測（40,000,000回の空ループの
+ *  壁時計時間＝約1.71秒／sil_dly_nse(1e9)の壁時計時間＝約184.6ms，
+ *  現状の暫定値TIM1=100,TIM2=100に対する比から逆算）でも160MHz説と
+ *  整合することを確認済み（詳細はdocs/dev/esp32c6-target.md）。
  */
-#define CORE_CLK_MHZ            40
+#define CORE_CLK_MHZ            160
 
 /*
- *  微少時間待ちのための定義（nsec単位．未較正の暫定値．dlynse較正は
- *  クロック確定後に実施する）
+ *  微少時間待ちのための定義（nsec単位．実機較正済み）
+ *
+ *  実機で`sil_dly_nse(1,000,000,000)`（1秒要求）の壁時計時間を
+ *  ホスト側シリアルタイムスタンプで実測し，反復的に較正した：
+ *    - 暫定値TIM1=100,TIM2=100 → 実測184.6ms（過少）
+ *    - TIM1=30,TIM2=18（単純な比例外挿）→ 実測693ms（まだ過少．
+ *      TIM2を小さくするとループ回数が増えるため単純な比例計算では
+ *      合わない＝小さい即値がRVC圧縮命令にエンコードされる等，命令
+ *      レベルの実行コストが即値の大きさに依存する余地があり，
+ *      単純な逆算では正確に較正できないことが判明）
+ *    - TIM2=12 → 実測1038.5ms（+3.9%）／TIM2=13 → 実測962.5ms（-3.8%）
+ *      で収束を確認．**TIM2=12**を採用（用途が周辺機器ドライバの
+ *      リトライ待ちであり，僅かに長め＝過少より過多の方が安全なため）。
+ *  TIM1（関数呼出し＋最初の比較のみの固定オーバヘッド）は，通常の
+ *  呼出しではTIM2由来のループ時間が支配的で影響が小さいため，比例
+ *  外挿値のTIM1=30のまま採用した（厳密な単独較正は未実施）。
  */
-#define SIL_DLY_TIM1    100
-#define SIL_DLY_TIM2    100
+#define SIL_DLY_TIM1    30
+#define SIL_DLY_TIM2    12
 
 /*
  *  ペリフェラルのベースアドレス（実機検証済み）
@@ -98,14 +120,19 @@
 #define ESP32C6_INTPRI_CPU_INTR_FROM_CPU_3  (ESP32C6_INTPRI_BASE + 0x9c)
 
 /*
- *  PCRレジスタ（CPUクロック設定．次マイルストーンで使用）
+ *  PCRレジスタ（CPUクロック設定）
  *
  *  PCR_SYSCLK_CONF：bit[17:16] SOC_CLK_SEL（0=XTAL/1=SPLL/2=FOSC）
  *  PCR_CPU_FREQ_CONF：bit[7:0] CPU_LS_DIV_NUM・bit[15:8] CPU_HS_DIV_NUM・
  *                     bit16 CPU_HS_120M_FORCE
  *
- *  実機未検証（SPLL起動シーケンスも含め要調査．esp32c6.h時点では
- *  レジスタアドレスの記録のみ）．
+ *  実機診断済み：起動直後のPCR_SYSCLK_CONF読出し値は`0x28010200`
+ *  （SOC_CLK_SEL=1=SPLL・HS_DIV_NUM=2＝÷3・XTAL_FREQ=40）,
+ *  PCR_CPU_FREQ_CONFは`0x00000000`（CPU_HS_DIV_NUM=0＝÷1）＝ROM
+ *  ブートローダがDirect Boot到達前に既に480MHz(SPLL)÷3÷1＝160MHzへ
+ *  設定済み（本ソフトウェアはこれらのレジスタを一切書き換えない．
+ *  書換え不要かつリスクを避けるため）。詳細はCORE_CLK_MHZの定義・
+ *  docs/dev/esp32c6-target.mdを参照。
  */
 #define ESP32C6_PCR_SYSCLK_CONF         (ESP32C6_PCR_BASE + 0x110)
 #define ESP32C6_PCR_CPU_FREQ_CONF       (ESP32C6_PCR_BASE + 0x118)
@@ -130,7 +157,10 @@
 /*
  *  SYSTIMERレジスタ（unit0＋target0のみ使用．C3と同一レイアウト＝
  *  ベースアドレスのみ異なる．クロックはXTAL 40MHz÷2.5＝16MHz固定・
- *  52bitカウンタの想定．実機での動作確認要）
+ *  52bitカウンタの想定．実機診断済み：CPU_CLKとは独立したクロック
+ *  ドメイン（PCR_SYSTIMER_FUNC_CLK_SEL＝XTAL／RC_FAST，CPU_CLKの
+ *  分周とは無関係）で，壁時計との突き合わせ実測でticks/us＝16.024
+ *  （TICKS_PER_US=16と0.15%以内で一致）を確認済み＝較正済み。
  */
 #define ESP32C6_SYSTIMER_CONF           (ESP32C6_SYSTIMER_BASE + 0x00)
 #define ESP32C6_SYSTIMER_UNIT0_OP       (ESP32C6_SYSTIMER_BASE + 0x04)
