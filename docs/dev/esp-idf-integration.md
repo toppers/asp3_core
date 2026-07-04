@@ -331,3 +331,15 @@ Wi-Fi os_adapter shim（Phase B-2）で成立したWPA2 AP接続（L2）の上�
 （複数TCPセグメント）のペイロードとも欠落なくエコーバックされることを
 実機で確認（RAM使用率93.68%→93.86%，320KB中）。DHCP／ping動作への
 回帰なし。asp3_core側の変更は本項もゼロ。
+
+続いてBSDソケット互換（`socket()`/`bind()`/`listen()`/`accept()`/
+`recv()`/`send()`）に対応するため，`NO_SYS=1`（raw API＋net_task手動
+集約）から`NO_SYS=0`（実sys_arch実装＋lwIP自身が生成するtcpip_thread）
+へ移行。sys_arch（sem/mbox/thread）はWi-Fi shimと同じくASP3静的
+プールから割り当てる方式で実装（mboxはASP3データキューに1:1対応＝
+ボックス化不要）。新規デモ`apps/tcp_socket_echo`で，専用のASP3
+アプリタスク（tcpip_threadでもmain_taskでもない）からBSDソケットAPIで
+起動したTCPエコーサーバ（ポート8）を実機で検証：既存のraw APIエコー
+（ポート7）と同時動作，短文・2000バイトとも欠落なくエコーバック。
+DHCP／ping動作への回帰なし（RAM使用率95.90%，320KB中）。
+asp3_core側の変更は本項もゼロ。
