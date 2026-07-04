@@ -399,3 +399,143 @@ MAPレジスタを0に，全32 CPU線のENABLEを0に初期化しているため
 - 実機の`.text`終端（`0x42006310`）から`0x42033da0`まではまだ広い
   ギャップがある（約180KB）。この間に何があるか（他のセクション・
   リンカスクリプトの割付）を再確認する価値がある。
+
+## 調査継続（2セッション目）：真因は「wild jump」ではなく「割込み待ちハング」だった
+
+前回セッションの2大仮説（BSS再クリアループ重複／defaultハンドラの
+不正呼出し）を検証する前に，まず両方とも**却下**できた：
+
+- **BSSクリアループ重複説は幾何学的に否定**：`readelf -S build/esp32c6/asp.elf`
+  で`.text`は`0x42000000`〜`0x42006310`のみ．`start.S`のBSSクリアループは
+  この`.text`内に完全に収まっており，観測されたワイルドジャンプ先
+  （`0x42033da0`〜`0x42036800`）とは無関係（180KB以上離れている）。
+- **JTAGはこのセッションの実行環境では一切使用不可**：`openocd`は
+  実機・スタンドアロン問わず起動直後に無出力のままexit code 144で
+  終了する（`dangerouslyDisableSandbox`を付けても同じ）。前回記録の
+  CPUTAPID修正（`/tmp/ocd_scripts/target/esp32c6.cfg`）を適用しても
+  起動しない＝今回のセッションのサンドボックス環境固有の制約。
+
+そのため，JTAGに頼らない**ポーリング出力による生レジスタダンプ**で
+代替調査を行った（`sample/sample1.c`の`cpuexc_handler`にEXCNO_IINST
+発生時の即時ダンプを一時計装＝`ESP32C6_DIAG_EXC_DUMP`ビルドオプション，
+`target/esp32c6_gcc/target.cmake`に追加）。
+
+### 決定的な発見：CPU例外は一切発生していない
+
+`cpuexc_handler`（`DEF_EXC(CPUEXC1={EXCNO_IINST}, cpuexc_handler)`＝
+`sample1.cfg`で全ターゲット共通登録済み）の先頭に，`target_fput_log`
+直呼び出しによる生レジスタダンプを仕込んだところ，**クラッシュ再現時に
+一切出力されなかった**。`core_support.S`の`core_exc_entry`／
+`nk_exc_entry_1/2`はどちらの分岐でも無条件に`exc_table[excno]`を
+`jalr`で呼び出す実装（共有コード，C3と同一）であり，かつ例外処理は
+必ず`istkpt`（非タスクスタック）上で実行される設計のため，
+**logtaskのスタックオーバーフローがあってもこのダンプ自体は安全に
+動作するはず**．にもかかわらず無出力＝前回セッションのJTAG観測
+（`mcause=2`，PC=`0x42033da0`付近）は，**イリーガル命令例外が実際に
+発生したのではなく，このボード固有のJTAG／USB共用機構が原因で
+`monitor halt`時のPC/mcauseの読出し自体が信頼できなかった**可能性が
+高い（WFI中のハルトでdpcを誤読するriscv debug moduleの既知の癖と
+類似）。**「wild jump」は事実として撤回する**。
+
+### 真因：`logtask_main`が「送信可能」割込みを待ったまま永遠にブロックする
+
+`syssvc/logtask.c`の`logtask_main`に段階チェックポイント
+（`[M1]`〜`[M4]`，`target_fput_log`直呼び出し）を仕込み，実機で
+再現したところ：
+
+```
+[M1][M2][M3][M4]Sy[E]
+```
+
+`[M1]`=関数先頭，`[M2]`=`serial_opn_por()`直後，`[M3]`=`syslog_msk_log()`
+直後，`[M4]`=最初の`syslog_1()`直後——**ここまで全て正常に完走している**
+（`syslog_1(LOG_NOTICE, ...)`は`syslog_msk_log`でlowmask=EMERGのみに
+絞ったため，実際には低レベル即時出力されずログバッファへの登録のみで
+即座に戻る．これが`[M4]`まで一瞬で到達する理由）。
+
+その後，`logtask_main`のメインループが`syslog_print(&syslog,
+logtask_putc)`でバッファ済みメッセージを1文字ずつ`logtask_putc`→
+`serial_wri_dat`（`syssvc/serial.c`，**キュー＋割込みコールバック駆動の
+送信経路．banner表示や`[M1]`〜`[M4]`が使った直接ポーリング経路
+＝`target_fput_log`とは別物**）で出力し始める．"S""y"の2文字は
+`serial_wri_chr`内の直接書込み高速パス（`snd_count==0`かつ
+`sio_snd_chr`が即座に成功）で出力できたが，3文字目（"s"，"System"の続き）
+で初めてハードウェアFIFOが埋まっており`sio_snd_chr`が失敗，
+`serial_snd_chr`が`sio_ena_cbr(p_siopcb, SIO_RDY_SND)`を呼び出した
+（`esp32c6_usbjtag_ena_cbr`に一時計装した`[E]`マーカーで確認．
+**これがこのボードで初めてUSB Serial/JTAGのIN_EMPTY割込みを有効化する
+瞬間**）。文字はバッファに積まれ（`snd_bufsz`次第だが，このケースでは
+すぐに満杯＝`buffer_full=true`），`sig_sem`が呼ばれないまま
+`serial_wri_dat`が返り，**次の文字の送信で`wai_sem(snd_semid)`が
+呼ばれてブロックし，そのまま永遠に戻ってこない**。
+
+`esp32c6_usbjtag_isr_siop`（実際のISR本体）の先頭に軽量マーカー
+（`'{'`）を仕込んで確認したところ，**`[E]`以降このマーカーは一度も
+出力されない＝IN_EMPTY割込みのISRが一度も実行されていない**。
+つまり，`sio_ena_cbr`でペリフェラルのINT_ENAビットを有効化しても，
+**CPU側に実際の割込みが配送されない**．
+
+### レジスタダンプで確認した状態（1回限りの計装．現在のツリーには残っていない）
+
+`[E]`直後の1回限りのダンプで確認した値（`sio_ena_cbr(SIO_RDY_SND)`が
+`INT_ENA`へ書き込んだ直後）：
+
+| レジスタ | 値 | 意味 |
+|---|---|---|
+| USBJTAG INT_RAW | `0x0000310a` | bit3（IN_EMPTY）は**既に立っている**＝banner出力中（ポーリング経路．INT_CLRに一切触れない）で発生した送信完了イベントが，一度もクリアされずずっと残留していたと推定 |
+| USBJTAG INT_ENA | `0x0000000c` | bit2（OUT_RECV_PKT，`serial_opn_por`のSIO_RDY_RCV登録で既に有効）＋bit3（IN_EMPTY，今回有効化）＝期待通り |
+| USBJTAG INT_ST | `0x00000008` | bit3のみ＝RAW&ENA．ペリフェラル自身は「IN_EMPTY割込み中」と認識している |
+| PLICMX_ENABLE | `0x00000006` | bit1（TIMER）＋bit2（SIO）＝CPU側の線2許可も期待通り有効 |
+| PLICMX_THRESH | `0x00000001` | 内部優先度0をブロックする閾値（`irc_begin_int`等で昇格していない素の状態） |
+| PLICMX_EIP | `0x00000004` | bit2（線2）が**CPUに到達している状態として見えている** |
+| mstatus | `0x00000001` | この時点ではCPUロック中（`loc_cpu()`内）につきMIE=0（bit3）は想定通り |
+
+`unl_cpu()`直後（CPUロック解除後）の再ダンプでは`mstatus=0x00000009`
+（MIE=1，正常に復帰）・`PLICMX_EIP=0x00000004`（線2が**そのまま
+pendingで残り続ける**）を確認した。つまり，**MIE=1かつEIPで
+pending表示のまま，CPUは一切トラップを起こさない**。
+
+（注：この2つ目のダンプを`syssvc/serial.c`の`serial_wri_chr`内に
+仕込んだ際，同じ1バイトFIFO/1パケットのUSB Serial/JTAGハードウェアを
+診断出力自身が奪い合う形になり，本来の文字送信と診断出力が競合して
+何十回も`[U:...]`が連続出力される副作用が観測された＝**診断計装自体が
+Heisenbugを作った**．この重い計装は既にリバート済み．現在のツリーに
+残る計装は`[E]`（`ena_cbr`のSIO_RDY_SND時）と`{`（ISR先頭）の軽量
+マーカーのみ）。
+
+### 未検証・次の一手（最有力仮説）
+
+`arch/riscv_gcc/esp32c6/chip_support.S`の設計コメントは「全割込み
+ソースをlevel型で使用するためCLEAR操作は不要」と明記しているが，
+**PLICMX_TYPEレジスタ（`PLICMX_BASE+0x004`）を明示的にlevel（0）へ
+初期化しているコードが見当たらない**（`intmtx_initialize()`
+＝`arch/riscv_gcc/esp32c6/chip_kernel_impl.c`を要再確認）。もしCPU線2の
+TYPEがリセット既定でedge型になっていた場合：
+- banner出力中に発生した大量のIN_EMPTY「立上りエッジ」は，ENAが0の
+  間は（edge型でも）ラッチされずCPUには一切伝わらない可能性がある
+  一方で，**EIPレジスタ自体がedge型でもいつまで「pending」を保持する
+  実装か**（一度ラッチしたらCLEARするまで残るのか，該当エッジの
+  タイミングでのみ一瞬だけ見えるのか）を実機で確認できていない。
+- そもそも本当にlevel型のままなら，MIE=1＋EIP=pendingの状態で
+  CPUがトラップを起こさない理由が別に必要になる（優先度関連の
+  レジスタは全て確認済みで矛盾はない＝THRESH=1はTIMER/SIOとも
+  優先度1超なら通過するはず．未確認なのはCPU線2に割り当てた
+  実際のPRIORITYレジスタ値そのもの＝`PLICMX_PRI_BASEOFF+4*2`の
+  実機読出し値．もしここが0のままなら，THRESH=1で線2は永久にブロック
+  されている可能性がある＝**次に読むべき最有力候補**）。
+
+次のセッションはここから再開すること：
+1. `PLICMX_PRI_BASEOFF + 4*2`（線2の優先度レジスタ）の実機値を確認する
+   （0であればTHRESH=1によって永久にブロックされている説が濃厚）。
+   もし0なら，線2の優先度をCFG_INT登録時に明示的に1以上へ設定する
+   コード（`irc_set_priority`相当の呼出し）が実機到達前に行われているか
+   確認し，抜けていれば追加する。
+2. `PLICMX_TYPE`（線2のedge/level設定）の実機読出し値を確認し，
+   期待通りlevel（0）になっているか確認する。
+3. 上記いずれも問題なければ，`esp32c6.h`のPLICMX_BASE
+   （`0x20001000`）自体が実機で正しいアドレス空間にマップされているか
+   （別バス／別クロックドメインでアクセス自体は成立するか）を疑う。
+4. 診断計装は`ESP32C6_DIAG_EXC_DUMP`（`target/esp32c6_gcc/target.cmake`
+   の`option()`）で有効化できる．診断コードを追加する際は，実際の
+   メッセージ送信と同じUSB Serial/JTAGの1バイトFIFOを奪い合わない
+   よう注意すること（本セッションで一度Heisenbugを作った教訓）。

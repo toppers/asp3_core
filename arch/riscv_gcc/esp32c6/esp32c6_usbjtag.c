@@ -176,6 +176,10 @@ esp32c6_usbjtag_rcv_chr(SIOPCB *p_siopcb)
 /*
  *  SIOポートからのコールバックの許可
  */
+#ifdef ESP32C6_DIAG_EXC_DUMP
+extern void target_fput_log(char c);
+#endif /* ESP32C6_DIAG_EXC_DUMP */
+
 void
 esp32c6_usbjtag_ena_cbr(SIOPCB *p_siopcb, uint_t cbrtn)
 {
@@ -183,6 +187,11 @@ esp32c6_usbjtag_ena_cbr(SIOPCB *p_siopcb, uint_t cbrtn)
 
 	switch (cbrtn) {
 	case SIO_RDY_SND:
+#ifdef ESP32C6_DIAG_EXC_DUMP
+		target_fput_log('[');
+		target_fput_log('E');
+		target_fput_log(']');
+#endif /* ESP32C6_DIAG_EXC_DUMP */
 		sil_wrw_mem(ESP32C6_USBJTAG_INT_ENA(base),
 					sil_rew_mem(ESP32C6_USBJTAG_INT_ENA(base))
 							| ESP32C6_USBJTAG_INT_IN_EMPTY);
@@ -232,11 +241,18 @@ esp32c6_usbjtag_isr_siop(SIOPCB *p_siopcb)
 
 	stat = sil_rew_mem(ESP32C6_USBJTAG_INT_ST(base));
 
+#ifdef ESP32C6_DIAG_EXC_DUMP
+	target_fput_log('{');
+#endif /* ESP32C6_DIAG_EXC_DUMP */
+
 	if ((stat & ESP32C6_USBJTAG_INT_IN_EMPTY) != 0U) {
 		/*
 		 *  送信FIFOエンプティはイベント（送信完了時）として立つため，
 		 *  クリアしてから送信可能コールバックルーチンを呼び出す．
 		 */
+#ifdef ESP32C6_DIAG_EXC_DUMP
+		target_fput_log('I');
+#endif /* ESP32C6_DIAG_EXC_DUMP */
 		sil_wrw_mem(ESP32C6_USBJTAG_INT_CLR(base),
 					ESP32C6_USBJTAG_INT_IN_EMPTY);
 		esp32c6_usbjtag_irdy_snd(p_siopcb->exinf);

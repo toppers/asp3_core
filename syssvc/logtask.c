@@ -138,16 +138,41 @@ logtask_flush(uint_t count)
 /*
  *  システムログタスクの本体
  */
+#ifdef ESP32C6_DIAG_EXC_DUMP
+extern void target_fput_log(char c);
+
+static void
+diag_mark(const char *s)
+{
+	while (*s != '\0') {
+		target_fput_log(*s);
+		s++;
+	}
+}
+#endif /* ESP32C6_DIAG_EXC_DUMP */
+
 void
 logtask_main(EXINF exinf)
 {
 	SYSLOG	syslog;
 	ER_UINT	rercd;
 
+#ifdef ESP32C6_DIAG_EXC_DUMP
+	diag_mark("\r\n[M1]");
+#endif /* ESP32C6_DIAG_EXC_DUMP */
 	(void) serial_opn_por(LOGTASK_PORTID);
+#ifdef ESP32C6_DIAG_EXC_DUMP
+	diag_mark("[M2]");
+#endif /* ESP32C6_DIAG_EXC_DUMP */
 	(void) syslog_msk_log(LOG_UPTO(LOG_NOTICE), LOG_UPTO(LOG_EMERG));
+#ifdef ESP32C6_DIAG_EXC_DUMP
+	diag_mark("[M3]");
+#endif /* ESP32C6_DIAG_EXC_DUMP */
 	syslog_1(LOG_NOTICE, "System logging task is started on port %d.",
 													LOGTASK_PORTID);
+#ifdef ESP32C6_DIAG_EXC_DUMP
+	diag_mark("[M4]");
+#endif /* ESP32C6_DIAG_EXC_DUMP */
 	while (true) {
 		while ((rercd = syslog_rea_log(&syslog)) >= 0) {
 			if (((uint_t) rercd) > 0U) {

@@ -243,9 +243,75 @@ ID	cpuexc_tskid;		/* CPU例外を起こしたタスクのID */
 
 #ifdef CPUEXC1
 
+#ifdef ESP32C6_DIAG_EXC_DUMP
+/*
+ *  診断用：CPU例外発生時に生レジスタを直接ポーリング出力する（syslog/
+ *  logtaskのキュー経由を一切使わない）．ESP32-C6のlogtaskクラッシュ調査
+ *  用の一時的計装．docs/dev/esp32c6-target.md参照．
+ */
+extern void target_fput_log(char c);
+
+static void
+diag_puts(const char *s)
+{
+	while (*s != '\0') {
+		target_fput_log(*s);
+		s++;
+	}
+}
+
+static void
+diag_puthex32(uint32_t v)
+{
+	static const char hextab[] = "0123456789abcdef";
+	int_t i;
+
+	for (i = 28; i >= 0; i -= 4) {
+		target_fput_log(hextab[(v >> i) & 0xfU]);
+	}
+}
+
+static void
+diag_dump_excinf(void *p_excinf)
+{
+	T_EXCINF *p = (T_EXCINF *) p_excinf;
+
+	diag_puts("\r\n[DIAG] pc=");
+	diag_puthex32((uint32_t) p->pc);
+	diag_puts(" ra=");
+	diag_puthex32((uint32_t) p->ra);
+	diag_puts(" mstatus=");
+	diag_puthex32((uint32_t) p->mstatus);
+	diag_puts("\r\n[DIAG] a0=");
+	diag_puthex32((uint32_t) p->a0);
+	diag_puts(" a1=");
+	diag_puthex32((uint32_t) p->a1);
+	diag_puts(" a2=");
+	diag_puthex32((uint32_t) p->a2);
+	diag_puts(" a3=");
+	diag_puthex32((uint32_t) p->a3);
+	diag_puts("\r\n[DIAG] t0=");
+	diag_puthex32((uint32_t) p->t0);
+	diag_puts(" t1=");
+	diag_puthex32((uint32_t) p->t1);
+	diag_puts(" t2=");
+	diag_puthex32((uint32_t) p->t2);
+	diag_puts(" ra_again=");
+	diag_puthex32((uint32_t) p->ra);
+	diag_puts("\r\n[DIAG] intpri=");
+	diag_puthex32((uint32_t) p->intpri);
+	diag_puts(" exncnt=");
+	diag_puthex32(p->exncnt);
+	diag_puts("\r\n");
+}
+#endif /* ESP32C6_DIAG_EXC_DUMP */
+
 void
 cpuexc_handler(void *p_excinf)
 {
+#ifdef ESP32C6_DIAG_EXC_DUMP
+	diag_dump_excinf(p_excinf);
+#endif /* ESP32C6_DIAG_EXC_DUMP */
 	syslog(LOG_NOTICE, "CPU exception handler (p_excinf = %08p).", p_excinf);
 	if (sns_ctx() != true) {
 		syslog(LOG_WARNING,
