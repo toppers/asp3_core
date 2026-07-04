@@ -105,6 +105,115 @@ SDK（ESP-IDF）非依存の自己完結ターゲット。QEMUでCIが回る形�
   ESP-IDFバージョンにより差がある）
 - Wi-Fiを載せない場合ESP32を選ぶ意味が半減する＝Phase Bまでやり切って価値が出る項目
 
+### Phase D：Bluetooth（BLE）統合（計画．着手前）
+
+Phase A〜Cで確立したesp-hal-3rdparty方式・os_adapter shim方式を
+Bluetooth（BLE．ESP32-C3はBT 5 LEのみ＝BR/EDR非搭載）へ展開する。
+外側リポジトリ`asp3_esp_idf`（Wi-Fi/lwIPと同じリポジトリ）での作業。
+
+**Wi-Fiとの本質的な違い**：Wi-Fi blobは関数ポインタテーブル
+（`wifi_osi_funcs_t`）越しにOS依存部を差し替える設計だったのに対し，
+BTコントローラ本体（`components/bt/controller/esp32c3/bt.c`．
+封印済みblobではなくソース配布）は`freertos/FreeRTOS.h`等を直接
+includeしFreeRTOS APIを**インラインで直接呼ぶ**。したがって
+「osi関数テーブルを実装する」のではなく「**freertos/\*.hヘッダ自体を
+ASP3向けにシムする**」という一段階違うアプローチが要る（実質は
+同じ`esp_shim.c`プリミティブへの委譲だが，差し替え粒度がヘッダ単位
+になる点が新規）。
+
+**未初期化のsubmodule**（着手時に`git submodule update --init`が
+必要）：
+- `hal/components/bt/controller/lib_esp32c3_family`
+  （espressif/esp32c3-bt-lib．コントローラ本体blob）
+- `hal/components/bt/host/nimble/nimble`（espressif/esp-nimble．
+  NimBLE本体）
+
+PHY層のBT対応（`libbtbb.a`／`libbttestmode.a`／`librftest.a`）は
+Wi-Fi用PHYと同梱で既に`hal/components/esp_phy/lib/esp32c3/`に存在
+（追加取得不要）。
+
+**ホストスタックはNimBLE**（Bluedroidではなく）。理由：ESP32-C3は
+LEのみでBluedroidのBR/EDR機構が過剰。何よりNimBLEには
+`hal/components/bt/porting/npl/freertos/src/npl_os_freertos.c`
+という`ble_npl_*`API（mutex/sem/eventq/callout等）の薄い移植層が
+既にあり，これはWi-Fiの`wifi_osi_funcs_t`とほぼ同型＝
+`esp_wifi_adapter.c`と同じやり方で`esp_ble_npl_adapter.c`を書ける
+（低リスク・実績パターンの再利用）。VHCI⇄NimBLEの橋渡しも
+`hal/components/bt/host/nimble/esp-hci/src/esp_nimble_hci.c`
+1ファイルに閉じている。なお，この構成にはNuttX側の前例が見当たらず
+（本submoduleにfreertos互換ヘッダの実体なし），Wi-Fi Phase Bで
+できた「NuttXの`esp_wifi_adapter.c`を参考にする」式の下敷きが無い
+＝相対的に新規性が高い。
+
+**bt.cが直接呼ぶFreeRTOS API**（grep済み・全19種）：
+`xTaskCreatePinnedToCore`／`xQueueCreate`／`xQueueSend(FromISR)`／
+`xQueueReceive(FromISR)`／`xSemaphoreCreateCounting`／
+`xSemaphoreCreateMutex`／`xSemaphoreTake`／`xSemaphoreGive`／
+`vQueueDelete`／`vSemaphoreDelete`／`vTaskDelete`／
+`portENTER/EXIT_CRITICAL`（ISR/SAFE変種含む）。いずれも既存の
+`esp_shim.c`プリミティブ（`esp_shim_queue_*`／`esp_shim_sem_*`／
+`esp_shim_task_create`／`esp_shim_int_disable/restore`）へそのまま
+委譲できる（新しいプリミティブの発明は不要，`freertos/{FreeRTOS,
+task,queue,semphr}.h`シムヘッダを書くだけ）。
+
+その他のbt.c依存（いずれも低リスクな対処方針あり）：
+- `esp_timer_*`：Wi-Fi shimで実装済みのets_timer機構
+  （専用タイマタスク＋期限ソート済みリスト）と同じ設計を
+  `esp_timer_*`という別名でもう一度提供すればよい（新規発明ではなく
+  再利用）。ただしBLEの接続間隔タイミングがWi-Fiで検証した粒度で
+  足りるかは未検証＝実機リスク
+- `esp_ipc_call_blocking`：C3はシングルコアのため同期直接呼出しに
+  スタブ化するだけでよい
+- `esp_pm_lock_*`：Wi-Fi同様（PS_NONE・電源管理なしの既存方針）
+  no-opスタブでよい
+- `esp_partition_*`（NVS/キャリブレーションデータ）：Wi-FiのNVS
+  スタブ（毎回起動時に全較正）と同じ方針で`find_first`がNULLを
+  返す形にすればよい
+
+tinycrypt（`hal/components/bt/common/tinycrypt/src/`．BLEペアリング
+用のAES-CMAC/ECC）はRTOS依存が無さそうで無改造で組み込める見込み
+（要ビルド確認）。
+
+**RAM予算が最大のリスク**：現状のWi-Fi＋lwIP＋BSDソケットビルドは
+320KB中95.9%使用（残り約13KB）。BTコントローラ＋NimBLEホストが
+この余白に収まるとは考えにくい。**Phase D-1は`ESP32C3_WIFI=OFF`の
+BT単体ビルド**（Wi-FiなしのRAM予算＝約88.6%起点）から着手し，
+Wi-Fi＋BT同時動作（coexアダプタ＝`esp_coex_adapter.c`を現状の
+ダミーno-opテーブルから実働へ切替える必要が生じる）は同時動作の
+必要性が生じた時点で別途判断する。
+
+**フェーズ分割案**：
+- **Phase D-1：コントローラ起動＋VHCIループバック**（工数目安：
+  Wi-Fi Phase B-2a相当，freertosヘッダシムに前例が無い分やや大きい
+  可能性）。submodule初期化→`freertos/*.h`シムヘッダ実装→
+  `esp_timer`/`esp_pm`/`esp_ipc`/`esp_partition`スタブ→実機で
+  `esp_bt_controller_init/enable`成功→VHCI生存確認（HCI
+  resetコマンドを`esp_vhci_host_send_packet`で送り応答受信）。
+  ホストスタックは不要（Wi-Fi Phase B-2aが素のscanをTCP/IP無しで
+  証明したのと同じ考え方）
+- **Phase D-2：NimBLEホスト統合**（工数目安：Wi-Fi Phase B-2b相当，
+  `ble_npl_*`の接続点が綺麗なぶんやや小さい可能性）。
+  `esp_ble_npl_adapter.c`実装（`esp_wifi_adapter.c`と同型）→
+  `esp_nimble_hci.c`をPhase D-1のVHCIへ接続→`nimble_port_init()`
+  成立
+- **Phase D-3：最小デモ**（工数目安：D-1/D-2成立後は小さい）。
+  advertising専用のBLEペリフェラル（GATTサーバ不要の最小形），または
+  1キャラクタリスティックのGATTサーバを実装し，スマートフォン等の
+  BLEスキャナで確認（TCP/IPフェーズの「DHCP＋ping」に相当する
+  マイルストーン）
+
+**残るリスク（実機でしか解けない）**：
+1. freertosヘッダシム方式がbt.cの実体に対して本当にコンパイルが
+   通るか（タスク優先度／`xTaskCreatePinnedToCore`のcore引数の扱い／
+   ISR文脈でのキュー送信がASP3の`psnd_dtq`と意味的に一致するか）
+2. `esp_timer`にBLE接続間隔の精度要件を満たす分解能が必要か
+   （Wi-Fiで検証済みの粒度で足りるかは未検証）
+3. BT単体ビルドのRAM収まり具合（実際にビルドするまで不明。
+   D-2/D-3着手前に最初に測定すべき）
+4. 実機固有のBT版errata（RNGレジスタ・PSA Crypto初期化・eFuse
+   オフセット・ROM coexist_funcsとWi-Fiで4件見つかった実機限定の
+   不具合の系譜から，BT版でも最低1件は同種の発見を見込む）
+
 ## 実施結果
 
 ### Phase 0（調査）結果（2026-07-02〜03）
