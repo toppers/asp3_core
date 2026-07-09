@@ -96,6 +96,14 @@
 .endm
 
 /*
+ *  タスク実行開始時(start_r)の追加コンテキスト初期化フック．PolarFire SoC
+ *  Kitは既定不要(空)．(TLS初期化等に使うチップ依存フック点．a0=p_runtsk
+ *  は不変とする契約)
+ */
+.macro init_additional_regs_start_r tcb_reg
+.endm
+
+/*
  *  コア依存部で共通な定義
  */
 #include "core_asm.inc"

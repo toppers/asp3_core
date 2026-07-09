@@ -56,6 +56,54 @@
 .endm
 
 /*
+ *  タスク実行開始時(start_r)のTLS(スレッドローカルストレージ)初期化．
+ *  ESP-IDF v6.1 picolibcのrand()等_Thread_local変数はtp(スレッドポインタ)相対でアクセスされるが，
+ *  ASP3はタスク毎にtpを設定しないためtp=0のまま残り，TLS依存libc関数呼出し
+ *  でtp+offset(≈0)へのLoad access faultになりうる．
+ *
+ *  ESP-IDF FreeRTOSポート(uxInitialiseStackTLS)と同じ方式：リンカ提供のTLS
+ *  初期化イメージ(.tdataの値+.tbssのゼロ)を，タスクスタック最下位
+ *  (p_tinib->stk)へコピーし，その先頭をtpとする．新規タスク開始時点
+ *  (activate_context: sp=stk+stksz)ではスタックは丸ごと未使用のため安全．
+ *  .tbssはNOLOADのため_thread_local_bss_startからは読まずサイズ計算のみに
+ *  用いる．
+ *
+ *  レジスタ: \tcb_reg(a0=p_runtsk)は読むだけで不変．t0-t3/tpを破壊．
+ */
+#ifdef TOPPERS_SUPPORT_TLS
+.macro init_additional_regs_start_r tcb_reg
+    lw    t0, TCB_p_tinib(\tcb_reg)        /* t0 = p_tinib(RV32固定のためlw．
+                                             * lxはcore_asm.incが本ファイル
+                                             * 末尾の#includeより後で#define
+                                             * するためここではまだ未定義) */
+    lw    tp, TINIB_stk(t0)                /* tp = p_tinib->stk(基準点，以後不変) */
+    mv    t0, tp                           /* コピー先カーソル */
+    la    t1, _thread_local_data_start     /* .tdata コピー元 */
+    la    t2, _thread_local_data_end
+.Ltls_data_loop\@:
+    beq   t1, t2, .Ltls_bss_start\@
+    lb    t3, 0(t1)
+    sb    t3, 0(t0)
+    addi  t1, t1, 1
+    addi  t0, t0, 1
+    j     .Ltls_data_loop\@
+.Ltls_bss_start\@:
+    la    t1, _thread_local_bss_start      /* .tbss はサイズ計算のみ(読まない) */
+    la    t2, _thread_local_bss_end
+.Ltls_bss_loop\@:
+    beq   t1, t2, .Ltls_done\@
+    sb    zero, 0(t0)
+    addi  t0, t0, 1
+    addi  t1, t1, 1
+    j     .Ltls_bss_loop\@
+.Ltls_done\@:
+.endm
+#else /* TOPPERS_SUPPORT_TLS */
+.macro init_additional_regs_start_r tcb_reg
+.endm
+#endif /* TOPPERS_SUPPORT_TLS */
+
+/*
  *  コア依存部で共通な定義
  */
 #include "core_asm.inc"

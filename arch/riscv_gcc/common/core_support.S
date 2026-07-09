@@ -339,10 +339,15 @@ ALABEL(call_exit_kernel)
     /*
      * 【この時点のレジスタ状態】
      *  a0：p_runtsk（タスク切換え後）
+     *
+     *  init_additional_regs_start_r（チップ依存，chip_asm.inc）は，タスク実行
+     *  開始時の追加コンテキスト初期化フック（例：TLS初期化によるtp設定）．
+     *  a0（p_runtsk）は不変とする契約．既定は空マクロ（他チップは無影響）．
      */
 ALABEL(start_r)
     unlock_cpu_asm t0         /* CPUロック解除状態に */
     la  ra, ext_tsk           /* タスク本体からの戻り番地を設定 */
+    init_additional_regs_start_r a0   /* チップ依存の追加コンテキスト初期化(a0=p_runtsk) */
     lx  a1, TCB_p_tinib(a0)   /* p_runtsk->p_tinib → a1 */
     lx  a0, TINIB_exinf(a1)   /* exinfをパラメータに */
     lx  a2, TINIB_task(a1)    /* タスク起動番地にジャンプ */
