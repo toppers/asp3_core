@@ -872,7 +872,7 @@ ALABEL(core_exc_entry_1)
     /*
      *  CPU例外番号の取得と保存
      */
-    csrr a1, mcause           /* CPU例外番号を保存 */
+    core_get_exccode_asm a1   /* CPU例外番号(exccode)取得．CLIC対応はチップ依存マクロ */
     sx   a1, 2*XREG_SIZE(sp)
 
     /*
@@ -1174,7 +1174,7 @@ ALABEL(nk_exc_entry_2)
     /*
      *  CPU例外ハンドラの呼出し
      */
-    csrr   a1, mcause  /* CPU例外番号を第2引数に */
+    core_get_exccode_asm a1  /* CPU例外番号(exccode)．CLIC対応はチップ依存マクロ */
     la     t1, exc_table          /* CPU例外ハンドラテーブルの読込み */
     slli   t2, a1, INTPTR_T_SHIFT
     add    t2, t1, t2

@@ -18,6 +18,15 @@
 #define TOPPERS_CHIP_ASM_INC
 
 /*
+ *  CPU例外番号(exccode)の取得（非CLIC標準版：mcauseそのまま）
+ *  共通部core_support.Sがexc_table索引前に呼ぶ．CLIC搭載チップは下位12bit
+ *  へマスクするが，本チップ（非CLIC）のmcauseは例外コードのみのため素通し．
+ */
+.macro core_get_exccode_asm reg
+    csrr  \reg, mcause
+.endm
+
+/*
  *  ディスパッチ時の追加コンテキストの保存
  */
 .macro save_additional_regs_disp
