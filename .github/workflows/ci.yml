@@ -307,7 +307,7 @@ jobs:
             -nographic -semihosting-config enable=on,target=native \
             -bios none -kernel build/test_porting-polarfire/asp.elf \
             | tee test_porting.log || true
-          grep -q "# 6/6 passed" test_porting.log
+          grep -q "# 8/8 passed" test_porting.log
 
   #
   #  QEMU RV32IMC（esp32c3）：build → sample1スモーク → test_porting →
@@ -357,7 +357,7 @@ jobs:
           timeout 60 $QEMU_ESP -M esp32c3 -nographic -semihosting \
             -drive file=build/test_porting-esp32c3/asp_flash.bin,if=mtd,format=raw \
             | tee test_porting.log || true
-          grep -q "# 6/6 passed" test_porting.log
+          grep -q "# 8/8 passed" test_porting.log
       - name: Smoke tests (testexec.py)
         run: |
           scripts/ci/run_testexec.py --options "--preset esp32c3-qemu" \

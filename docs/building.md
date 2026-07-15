@@ -173,7 +173,7 @@ cmake --preset linux -B build/test_porting-linux \
   -DASP3_APPLDIR=test/porting -DASP3_APPLNAME=test_porting \
   -DASP3_EXTRA_APP_C_FILES=test/porting/tap.c
 cmake --build build/test_porting-linux
-ctest --test-dir build/test_porting-linux   # linuxのみctest登録（# 6/6 passed照合）
+ctest --test-dir build/test_porting-linux   # linuxのみctest登録（# 8/8 passed照合）
 
 # 機能テスト（QEMU mps2の例）：作業ディレクトリを作って実行
 mkdir TEST-MPS2 && cd TEST-MPS2

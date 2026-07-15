@@ -39,7 +39,7 @@ cmake --build build/test_porting-<name>
 # 実機：シリアル捕捉→ run（pico2系）／swd-run（stm32）でロード実行
 ```
 
-- 合否＝**`# 6/6 passed` 行**のパース（全ターゲット共通。QEMU終了コードに依存しない）。
+- 合否＝**`# 8/8 passed` 行**のパース（全ターゲット共通。QEMU終了コードに依存しない）。
 - linux は ctest 登録済み（`ctest --test-dir build/test_porting-linux`）。
 - 故障切り分け順（①ブート/UART→②タイマ歩進→③ディスパッチャ→④⑤カーネル本体→
   ⑥タイマ割込み経路）。落ちた項目→疑う場所は `test/porting/README.md` の表。

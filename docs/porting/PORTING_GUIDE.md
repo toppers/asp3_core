@@ -532,7 +532,7 @@ Hello from <TARGET_NAME>!
 
 ### 8-2. TAP移植検証テストの実行
 
-`test/porting/` の6項目テストを，既存の `ASP3_APPLDIR`/`ASP3_APPLNAME`
+`test/porting/` の8項目テストを，既存の `ASP3_APPLDIR`/`ASP3_APPLNAME`
 機構でビルドして実行する（詳細は `test/porting/README.md`）：
 
 ```bash
@@ -546,20 +546,24 @@ cmake --build build/test_porting-<name>
 
 期待TAP出力：
 ```
-1..6
+1..8
 ok 1 - syslog_output
 ok 2 - tick_timer_basic
 ok 3 - task_create_activate
 ok 4 - semaphore_signal_wait
 ok 5 - eventflag_set_wait
 ok 6 - alarm_handler
-# 6/6 passed
+ok 7 - isr_delayed_dispatch
+ok 8 - wake_from_idle
+# 8/8 passed
 ```
 
-**合格＝`# 6/6 passed` 行があること**（全ターゲット共通の機械判定）。
+**合格＝`# 8/8 passed` 行があること**（全ターゲット共通の機械判定）。
 項目の並びは故障切り分けの順序（①ブート/UART → ②タイマ歩進 →
-③ディスパッチャ → ④⑤カーネル本体 → ⑥タイマ割込み経路）に
-なっている．落ちた項目から疑う場所は `test/porting/README.md` の表を参照．
+③ディスパッチャ → ④⑤カーネル本体 → ⑥タイマ割込み経路 → ⑦⑧割込み
+出口でのディスパッチ経路．CLIC等mret非経由出口でHW優先度状態が固着し
+得るチップの検出用）になっている．落ちた項目から疑う場所は
+`test/porting/README.md` の表を参照．
 
 ### 8-3. POSIX simとのクロスチェック
 

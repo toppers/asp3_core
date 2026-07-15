@@ -1,6 +1,6 @@
 ---
 name: asp3-core-ops
-description: asp3_core リポジトリ固有の運用（ビルド・QEMU/実機実行・TAPテスト・構造化ログ(slog)解析・TTSP3適合性テスト・上流マージ台帳）の具体コマンドとツール。CMakeプリセットでビルドするとき、QEMU(mps2_an505/mps2_an386/mps3_an547/zcu102/polarfire 等)で動かすとき、`--tap`/`--slog` を使うとき、`scripts/parse_slog.py`/`check_events.py` でトレースを解析するとき、`test/ttsp/run_ttsp.py` で TTSP3 を回すとき、`DIVERGENCE_MAP.md`/`UPSTREAM_PRISTINE.txt`/`docs/dev/cfg-spec-map.md` を扱うとき、SAFEG(`ENABLE_SAFEG_M`)ビルドを確認するとき、ARM-M実機で性能評価（DWT CYCCNT・`USE_ARM_DWT_PMCNT` で ns 精度の histogram／`PERF_DWT.md`）を行うときに使う。実機(SWD/JTAG)でロード実行・テストするとき＝OpenOCD(rp2350.cfg/rp2350-riscv.cfg)・`--target run`/`swd-run`/`osdebug`・移植検証テスト(`test/porting` の `# 6/6 passed`)・機能テスト全件(`scripts/ci/run_board_pico2.sh` で testexec)・pico2_arm/pico2_riscv/stm32mp257f_dk 実機・`gh run watch` でのCI確認 にも使う。**規約の正本は `AGENTS.md`。TOPPERS共通の概念は別skill `toppers-kernel-dev`/`toppers-kernel-debug`/`toppers-asp`。本skillはasp3_core固有の具体手順だけを補う。**
+description: asp3_core リポジトリ固有の運用（ビルド・QEMU/実機実行・TAPテスト・構造化ログ(slog)解析・TTSP3適合性テスト・上流マージ台帳）の具体コマンドとツール。CMakeプリセットでビルドするとき、QEMU(mps2_an505/mps2_an386/mps3_an547/zcu102/polarfire 等)で動かすとき、`--tap`/`--slog` を使うとき、`scripts/parse_slog.py`/`check_events.py` でトレースを解析するとき、`test/ttsp/run_ttsp.py` で TTSP3 を回すとき、`DIVERGENCE_MAP.md`/`UPSTREAM_PRISTINE.txt`/`docs/dev/cfg-spec-map.md` を扱うとき、SAFEG(`ENABLE_SAFEG_M`)ビルドを確認するとき、ARM-M実機で性能評価（DWT CYCCNT・`USE_ARM_DWT_PMCNT` で ns 精度の histogram／`PERF_DWT.md`）を行うときに使う。実機(SWD/JTAG)でロード実行・テストするとき＝OpenOCD(rp2350.cfg/rp2350-riscv.cfg)・`--target run`/`swd-run`/`osdebug`・移植検証テスト(`test/porting` の `# 8/8 passed`)・機能テスト全件(`scripts/ci/run_board_pico2.sh` で testexec)・pico2_arm/pico2_riscv/stm32mp257f_dk 実機・`gh run watch` でのCI確認 にも使う。**規約の正本は `AGENTS.md`。TOPPERS共通の概念は別skill `toppers-kernel-dev`/`toppers-kernel-debug`/`toppers-asp`。本skillはasp3_core固有の具体手順だけを補う。**
 ---
 
 # asp3_core 運用ツール（リポジトリ固有）
@@ -157,7 +157,7 @@ skill `toppers-kernel-debug`/`toppers-kernel-dev`。
 - ボード別 OpenOCD cfg と `--target run`/`swd-run` の使い分け
 - OpenOCD の作法（`pkill -x openocd`・シリアルは書込み前に開く）
 - **移植検証テスト** `test/porting`（`tap.c` を `ASP3_EXTRA_APP_C_FILES` で足す・
-  `# 6/6 passed` 判定・故障切り分け順）
+  `# 8/8 passed` 判定・故障切り分け順）
 - **機能テスト全件** `scripts/ci/run_board_pico2.sh`（testexec の実機ランナ・逐次実行・
   OBJ削除のタイミング）
 - **osdebug**（実機は `monitor resume/halt`＋`flush register-cache`）
