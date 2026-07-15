@@ -102,3 +102,36 @@ test_porting.cfg／test_porting_cfg.h・README.md。計約290行）
   前にUARTをディスエーブルすることだった．`rp2350_uart_cls_por()` に
   FR.BUSYの待ちを追加して解消（ARM版にも共通の潜在不具合．
   `DIVERGENCE_MAP.md` 参照）．QEMUでは送信が瞬時のため顕在化しない．
+
+### 追記（2026-07-15）：項目7・8追加＝CLIC出口正規化（RISC-V共通部）の回帰検出穴を解消
+
+asp3_esp_idf側のESP32-C5移植（CLIC搭載チップ）で，RISC-V共通部
+（`arch/riscv_gcc/common/core_support.S`）の割込み出口のうち2経路
+（idle復帰の`j dispatcher_0`／遅延ディスパッチの`j dispatcher`）が
+mretを経由しないことが実機で致命的な固着バグ（CLICのmintstatus.mil
+がmretでしか降格できずハングする）として顕在化した
+（`asp3_esp_idf/docs/c5-clic-exit-fix-review.md`）。原因調査の過程で，
+**旧来の6項目はこの2経路を構造的に一度も踏まないため検出できない**
+ことが判明した（項目6までは実行中タスクへのmret復帰か，タスク
+コンテキストからの自発的`dispatch()`のみ）。
+
+この2経路をFMP3と同じ「出口正規化型」（mepc設定＋MPP=M＋MPIEクリア＋
+`mret`。非CLICチップのirc_end_intはmcauseに触れないため無害）へ変更
+したのに合わせ，本項目7（`isr_delayed_dispatch`）・8（`wake_from_idle`）
+を追加し，6項目→8項目・`# 6/6 passed`→`# 8/8 passed`へ変更した
+（`CMakeLists.txt`のPASS_REGULAR_EXPRESSIONも同時に更新）。
+
+- 項目7：割込みコンテキスト（`alarm2_handler`）から`sig_sem()`で自分より
+  高優先度のタスクを起床させ，「割込み出口での遅延ディスパッチ」を踏む。
+- 項目8：`dly_tsk()`でCPUを真にIDLEにし，満了タイマ割込みが自タスクを
+  起床させる「IDLEに割り込んだ割込みからのディスパッチ復帰」を踏む。
+  復帰後もtick進行が続くことまで確認し，固着（全割込み永久ブロック）の
+  非再発を機械判定する。
+
+検証：QEMU esp32c3（非CLIC）8/8・実機ESP32-C3/ESP32-C6（非CLIC）8/8・
+POSIX linux 8/8＋ctest。CLIC実機（ESP32-C5）での等価性確認は
+`asp3_esp_idf/docs/c5-bringup.md`側の実施記録を参照。
+**他リポジトリ（asp3_pico_sdk/asp3_fsp/asp3_stm32cube/asp3_mcuxsdk/
+asp3_esp_idf）がドキュメントで参照している「test_porting 6/6」は，
+次回submodule bump時に「8/8」へ読み替えが必要**（本変更のみでは
+他リポジトリのドキュメントは自動更新されない）。

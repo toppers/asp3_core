@@ -481,7 +481,7 @@ endif()
 #  ctest（移植検証テスト test/porting．経緯はdocs/dev/porting-test.md）
 #
 #  ホスト実行可能なlinux_gccでのみ登録する．合否はTAPサマリ行
-#  （"# 6/6 passed"）の出力照合で判定する（全ターゲット共通の判定方式を
+#  （"# 8/8 passed"）の出力照合で判定する（全ターゲット共通の判定方式を
 #  ctestに直結したもの）．
 #
 if(ASP3_TARGET STREQUAL "linux_gcc" AND ASP3_APPLNAME STREQUAL "test_porting")
@@ -491,7 +491,7 @@ if(ASP3_TARGET STREQUAL "linux_gcc" AND ASP3_APPLNAME STREQUAL "test_porting")
         COMMAND bash -c "timeout 10 $<TARGET_FILE:asp> 2>&1"
     )
     set_tests_properties(test_porting.run PROPERTIES
-        PASS_REGULAR_EXPRESSION "# 6/6 passed"
+        PASS_REGULAR_EXPRESSION "# 8/8 passed"
         FAIL_REGULAR_EXPRESSION "not ok"
         TIMEOUT 30
     )

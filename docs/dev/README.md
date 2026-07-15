@@ -27,7 +27,7 @@
 | CLIターゲット | `cli-target.md` | 完了 |
 | CI整備 | `ci.md` | 完了 |
 | OS Awareness 対応 | `os-awareness.md` | 完了 |
-| 移植検証テスト | `porting-test.md` | 完了（polarfire QEMUのみCIで確認） |
+| 移植検証テスト | `porting-test.md` | 完了（polarfire QEMUのみCIで確認。2026-07-15：CLIC出口正規化に伴い項目7・8追加＝6項目→8項目，`# 8/8 passed`） |
 | RISC-V Hazard3ターゲット | `pico2-riscv.md` | 完了（dlynse較正・testexec 36/36・OS Awareness実機確認まで完了） |
 | ドキュメントMarkdown化 | `docs-markdown.md` | 完了 |
 | devcontainer / Docker | `devcontainer.md` | 完了 |

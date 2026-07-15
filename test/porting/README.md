@@ -1,6 +1,6 @@
 # 移植検証テスト（test_porting）
 
-新ターゲット移植時の**最初の動作確認**テスト。カーネル基本機能6項目を
+新ターゲット移植時の**最初の動作確認**テスト。カーネル基本機能8項目を
 TAP形式で機械判定する。sample1（目視）・testexec全件（重い）の前段に置く。
 経緯・設計は `docs/dev/porting-test.md`、移植手順上の位置付けは
 `docs/porting/PORTING_GUIDE.md` Step 8-2 を参照。
@@ -15,9 +15,14 @@ TAP形式で機械判定する。sample1（目視）・testexec全件（重い�
 | 4 | `semaphore_signal_wait` | セマフォ同期（カーネル本体） | （3まで通っていれば稀） |
 | 5 | `eventflag_set_wait` | イベントフラグ同期（同上） | 同上 |
 | 6 | `alarm_handler` | **タイマ割込みの経路** | 割込みコントローラ設定・ハンドラ登録 |
+| 7 | `isr_delayed_dispatch` | **割込みハンドラ出口での高優先度タスクへの遅延ディスパッチ** | 割込み出口のディスパッチ経路（CLIC等，mret非経由出口でHW優先度状態が固着し得るチップで重要） |
+| 8 | `wake_from_idle` | **IDLEに割り込んだ割込みからのディスパッチ復帰** | 同上（idle復帰の経路） |
 
 2と6の待ちループは時間上限＋回数上限の二重バウンドで、タイマが
-停止していてもハングしない。
+停止していてもハングしない。7・8は項目6までの経路（実行中タスクへの
+mret復帰／タスクコンテキストからの自発的dispatch()）が構造的に踏まない
+「割込み出口でのディスパッチ」を意図的に踏む（背景は
+`docs/dev/porting-test.md`のCLIC出口正規化に関する追記を参照）。
 
 ## ビルドと実行
 
@@ -54,17 +59,19 @@ timeout 30 qemu-system-arm -M mps2-an505 -cpu cortex-m33 \
 
 ```
 # test_porting: kernel porting verification
-1..6
+1..8
 ok 1 - syslog_output
 ok 2 - tick_timer_basic
 ok 3 - task_create_activate
 ok 4 - semaphore_signal_wait
 ok 5 - eventflag_set_wait
 ok 6 - alarm_handler
-# 6/6 passed
+ok 7 - isr_delayed_dispatch
+ok 8 - wake_from_idle
+# 8/8 passed
 ```
 
-- **合格＝`# 6/6 passed` 行があること**（全ターゲット共通の機械判定。
+- **合格＝`# 8/8 passed` 行があること**（全ターゲット共通の機械判定。
   QEMU等の終了コードには依存しない）
 - 失敗項目は `not ok N - <項目名>` で示される
 
@@ -72,8 +79,8 @@ ok 6 - alarm_handler
 
 | ファイル | 内容 |
 |---|---|
-| `test_porting.c` | テスト本体（6項目） |
-| `test_porting.cfg` | 静的構成（タスク3・セマフォ・フラグ・アラーム） |
+| `test_porting.c` | テスト本体（8項目） |
+| `test_porting.cfg` | 静的構成（タスク5・セマフォ2・フラグ・アラーム2） |
 | `test_porting_cfg.h` | .c/.cfg共有ヘッダ（優先度・プロトタイプ） |
 | `tap.[ch]` | 最小TAPフレームワーク（test_svcとは独立） |
 | `expected/` | 構造化ログの期待イベント列（sample1用。AGENTS.md §8） |

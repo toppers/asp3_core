@@ -553,7 +553,28 @@ ALABEL(core_int_entry_2)
 #ifdef __riscv_flen
     addi sp, sp, (TNUM_RISCV_INT_FREG * FREG_SIZE)
 #endif /* __riscv_flen */
-    j    dispatcher_0
+    /*
+     *  IDLEに割り込んだ割込みからのリターン．dispatcher_0へmretで復帰する
+     *  (arm_m_gccのreturn_to_idleと同設計．FMP3 core_support.S:603-616も
+     *  同型)．MPP=M・MPIEクリア(MIE=0)でCPUロックを維持したまま分岐する。
+     *
+     *  この分岐を素のjumpではなくmret経由にするのは，CLIC搭載チップ
+     *  （mnlbits>0．例：ESP32-C5）でHWが割込み受付時にmintstatus.milを
+     *  自動昇格し，mret（mcause.MPILからの復元）でしか降格できないため。
+     *  素のjumpで抜けるとmilが昇格したまま固着し，同レベル以下の割込みが
+     *  永久ブロックされる（docs/c5-clic-exit-fix-review.md参照）。CLICの
+     *  mil復帰は，本mretの直前に必ず通るirc_end_int（チップ依存）が
+     *  mcause.mpil=0を強制することで担う。非CLICチップ（PLIC/INTMTX等）
+     *  のirc_end_intはmcauseに触れないため，本mretは単なる素のジャンプの
+     *  代替として無害（FMP3がPolarFire SoCで回帰確認済みの設計）。
+     */
+    la    t0, dispatcher_0
+    csrw  mepc, t0
+    li    t0, MSTATUS_MPP_M    /* MPP = M-mode */
+    csrs  mstatus, t0
+    li    t0, MSTATUS_MPIE     /* MPIEクリア → mret後もMIE=0(CPUロック維持) */
+    csrc  mstatus, t0
+    mret
 
 ALABEL(core_int_entry_3)
     /*
@@ -614,7 +635,25 @@ ALABEL(core_int_entry_3)
     sx sp, TCB_sp(a0)  /* スタックポインタを保存 */
     la t0, ret_int_r   /* 実行再開番地を保存 */
     sx t0, TCB_pc(a0)
-    j  dispatcher      /* a0にはp_runtskが格納されている */
+    /*
+     *  割込み出口での遅延ディスパッチ．dispatcherへmretで復帰する
+     *  (idle復帰core_int_entry_2と対称．FMP3 core_support.S:677-689も
+     *  同型)．a0=p_runtskを渡したまま遷移する(t0のみ使用しa0は破壊
+     *  しない)．MPP=M・MPIEクリア(MIE=0)でCPUロックを維持。
+     *
+     *  切替先タスクのTCB_pcがret_int_r以外(dispatch_r／start_r)の場合，
+     *  切替先はmretを一度も経由せずに実行再開する(タスクコンテキストへ
+     *  の復帰＝関数呼出しのjr raで戻るため)．そのためCLICのmil降格は
+     *  切替先の経路に依存させず，この分岐そのものをmret化して即座に
+     *  片付けておく必要がある(詳細はcore_int_entry_2のコメント参照)。
+     */
+    la    t0, dispatcher       /* a0にはp_runtskが格納されている */
+    csrw  mepc, t0
+    li    t0, MSTATUS_MPP_M    /* MPP = M-mode */
+    csrs  mstatus, t0
+    li    t0, MSTATUS_MPIE     /* MPIEクリア → mret後もMIE=0(CPUロック維持) */
+    csrc  mstatus, t0
+    mret
 
 ALABEL(ret_int_r)
     /*

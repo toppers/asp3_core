@@ -36,7 +36,9 @@ extern void	main_task(EXINF exinf);
 extern void	task2(EXINF exinf);
 extern void	task3(EXINF exinf);
 extern void	task4(EXINF exinf);
+extern void	task5(EXINF exinf);
 extern void	alarm1_handler(EXINF exinf);
+extern void	alarm2_handler(EXINF exinf);
 
 #endif /* TOPPERS_MACRO_ONLY */
 
