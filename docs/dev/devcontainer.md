@@ -38,7 +38,7 @@ devcontainer / Docker（AGENTS.md §1 機能追加計画、優先度：中）
 | `.devcontainer/` | 未作成 |
 | ピン留め対象（開発機の現状） | gcc 13.3／arm-none-eabi 13.2.1／aarch64-linux-gnu 13.3／riscv64-unknown-elf 13.2／CMake 3.28.3／Ninja 1.11.1／Python 3.12.3／**QEMU 11.0.0**（ローカルビルド） |
 | CIとの乖離 | QEMU（11.0 vs 8.2）・cppcheck（開発機に無し）・aarch64-none-elf（CIはtarball+cache） |
-| イメージ配布先 | GHCR（`ghcr.io/exshonda/asp3_core-dev`）。privateリポジトリのGHCRはActionsの`GITHUB_TOKEN`でpush/pull可 |
+| イメージ配布先 | GHCR（`ghcr.io/toppers/asp3_core-dev`・public）。pushはActionsの`GITHUB_TOKEN`で行う（`packages: write`） |
 
 ### 再検討：ベースを ubuntu:26.04 にする（2026-06-06・実地検証済み）
 
@@ -133,8 +133,7 @@ devcontainer / Docker（AGENTS.md §1 機能追加計画、優先度：中）
   CIのpull時間（GHCR→ランナー）が毎ジョブ発生するため、現行（apt install
   約1分）との比較で採否を判断（イメージはdevcontainer用とし、CIは従来方式の
   まま＋QEMUだけイメージから取り出す折衷もあり得る）
-- GHCR privateイメージのpullはdevcontainer利用時に `gh auth token` 等での
-  docker loginが必要（手順をdevcontainer.json/READMEに記載）
+- GHCRイメージはpublicのため、devcontainer利用時のpullに認証は不要
 
 ## 実施結果
 
@@ -149,7 +148,7 @@ Actions検証を実施した。
 
 - **aptパッケージは `=version` でピンしない**：Ubuntuアーカイブは旧版を
   保持しないため、ピンすると再ビルドが壊れる。バージョン固定は
-  **イメージの日付タグ**（`ghcr.io/exshonda/asp3_core-dev:YYYYMMDD`）で
+  **イメージの日付タグ**（`ghcr.io/toppers/asp3_core-dev:YYYYMMDD`）で
   担保し、検証済みバージョンはDockerfileコメントと
   コンテナ内 `/etc/asp3_core-toolchain-versions.txt`（ビルド時生成）に記録
 - **aarch64-none-elf tarball は SHA256 ピン**

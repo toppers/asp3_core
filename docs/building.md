@@ -219,7 +219,7 @@ CMake対応の経緯は `docs/dev/cmake.md` を参照。
 ## 6. 開発コンテナでのビルド
 
 ツールチェーン・QEMU・Pythonをピン留めした開発コンテナ
-（`ghcr.io/exshonda/asp3_core-dev`）を用意している。CIも同一イメージで
+（`ghcr.io/toppers/asp3_core-dev`）を用意している。CIも同一イメージで
 実行するため、コンテナ内で通ればCIでも通る（設計は `docs/dev/devcontainer.md`）。
 
 ### VS Code / Claude Code（devcontainer）
@@ -228,17 +228,13 @@ CMake対応の経緯は `docs/dev/cmake.md` を参照。
 定義済み。「Reopen in Container」だけで全ターゲットのbuild→run→test
 ループが揃う。
 
-privateリポジトリのGHCRイメージのため、初回は docker login が必要：
-
-```bash
-gh auth token | docker login ghcr.io -u <github-user> --password-stdin
-```
+GHCRイメージはpublicのため、docker login なしでpullできる。
 
 ### docker run で直接使う
 
 ```bash
 docker run --rm -it -v "$PWD":/workspaces/asp3_core -w /workspaces/asp3_core \
-  ghcr.io/exshonda/asp3_core-dev:20260606
+  ghcr.io/toppers/asp3_core-dev:20260606
 # コンテナ内（aarch64-none-elf同梱＝zcu102/stm32もプリセット素のままで通る）
 cmake --preset linux -B build/linux && cmake --build build/linux
 ```

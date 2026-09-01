@@ -47,7 +47,7 @@ ASP3カーネルを用いたシステム構築には，以下のツールが必�
 
 なお，TOPPERS第3世代カーネル向け Ruby版コンフィギュレータは，ASP3カーネルのパッケージに含まれているため，特別な準備は必要ない。
 
-> **asp3_core注**: asp3_coreで必要なツールは **CMake（3.22+）・Ninja・Python 3・各ターゲットのクロスGCC・QEMU** です。Ruby・GNU Make・tecsgenは不要です。コンフィギュレータはPython版（`cfg/cfg.py`）がリポジトリに含まれ，CMakeビルドが自動実行します。ツールチェーンをピン留めした開発コンテナ（`ghcr.io/exshonda/asp3_core-dev`）の利用を推奨します（`docs/building.md` §6）。
+> **asp3_core注**: asp3_coreで必要なツールは **CMake（3.22+）・Ninja・Python 3・各ターゲットのクロスGCC・QEMU** です。Ruby・GNU Make・tecsgenは不要です。コンフィギュレータはPython版（`cfg/cfg.py`）がリポジトリに含まれ，CMakeビルドが自動実行します。ツールチェーンをピン留めした開発コンテナ（`ghcr.io/toppers/asp3_core-dev`）の利用を推奨します（`docs/building.md` §6）。
 
 ## 3.2 TECSジェネレータの準備
 

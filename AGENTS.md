@@ -186,7 +186,7 @@ cmake --preset stm32mp257f_dk_arm64 -B build/stm32mp257f_dk_arm64 && cmake --bui
 > - ビルドは **CMakeのみ**（Makefile版は廃止済み。詳細は `docs/building.md`）。**プリセット名＝ターゲット名から `_gcc` を除いたもの**（QEMU/実機両対応のターゲットはQEMU側を `<プリセット名>-qemu`）。一覧は `cmake --list-presets`。
 > - `linux` プリセットの実体は **ホストシミュレーション**（`target/linux_gcc`＝上流SVNの `asp3_arch_posix_gcc` パッケージ由来）。
 > - QEMUマシン名は `mps2-an505`（ハイフン）だが、ASP3ターゲット名は `mps2_an505_gcc`（アンダースコア）。
-> - ツールチェーン・QEMUをピン留めした**開発コンテナ**（`ghcr.io/exshonda/asp3_core-dev`・`.devcontainer/`）があり、CIも同一イメージで実行する。手順は `docs/building.md` §6、設計は `docs/dev/devcontainer.md`。
+> - ツールチェーン・QEMUをピン留めした**開発コンテナ**（`ghcr.io/toppers/asp3_core-dev`・`.devcontainer/`）があり、CIも同一イメージで実行する。手順は `docs/building.md` §6、設計は `docs/dev/devcontainer.md`。
 
 ### 検証の鉄則
 
@@ -401,10 +401,10 @@ arch/target/アプリ/移植skill を外側で管理**する構成（`ASP3_TARGE
 
 | リポジトリ | 内容 | 実機検証 |
 |---|---|---|
-| [asp3_pico_sdk](https://github.com/exshonda/asp3_pico_sdk) | Raspberry Pi Pico SDK統合（RP2350） | PICO2（ARM/RISC-V） |
-| [asp3_fsp](https://github.com/exshonda/asp3_fsp) | Renesas FSP統合（RA・LLVM/clang＋RASC）＋移植skill | EK-RA6M5／EK-RA8M2 |
-| [asp3_stm32cube](https://github.com/exshonda/asp3_stm32cube)（旧 stm32_vscode_asp） | STM32Cube HAL統合（STM32H5・CubeMX）＋移植skill。STM32MP257/A35ターゲットの移植元でもある | NUCLEO-H563ZI／H533RE |
-| [asp3_mcuxsdk](https://github.com/exshonda/asp3_mcuxsdk) | NXP MCUXpresso SDK統合（i.MX RT685）。**Phase A・Phase B（SDK統合）とも完了・実機検証済**（`docs/dev/nxp-integration.md`） | EVK-MIMXRT685（Phase A：test_porting 6/6・testexec 33/35＝cpuexc1/4は arm_m 既知FAIL・dlynse較正・OS Awareness／Phase B：test_porting 6/6・testexec 33/36 PASS＝cpuexc1/4既知FAIL） |
-| [asp3_esp_idf](https://github.com/exshonda/asp3_esp_idf) | ESP-IDF統合（ESP32-C3／**ESP32-C6も対応開始**）。esp-hal-3rdparty方式＝FreeRTOS非依存のhal/soc層のみ使用。ESP32-C3：B-0/B-1（LL層コンソール・タイマ）・B-2（Wi-Fi os_adapter shim・scan＋WPA2接続）・C（lwIP・DHCP＋ping＋BSDソケット互換）完了，D（Bluetooth/NimBLE）は実施中（コントローラ起動まで実機成功，blob内部アサートで調査中）。ESP32-C6：submoduleを`feat/esp32c6`へ切替え，B-0/B-1（LL層コンソール・タイマ）完了（`docs/dev/esp-idf-integration.md`・`docs/hal-integration.md`） | ESP32-C3実機（B-1：test_porting 6/6・testexec 36/36／B-2：AP16-17個スキャン・STA_CONNECTED成立／C：DHCP取得・ゲートウェイping成功・BSDソケットTCP/UDP通信成功）／ESP32-C6実機（B-1：test_porting 6/6） |
+| [asp3_pico_sdk](https://github.com/toppers/asp3_pico_sdk) | Raspberry Pi Pico SDK統合（RP2350） | PICO2（ARM/RISC-V） |
+| [asp3_fsp](https://github.com/toppers/asp3_fsp) | Renesas FSP統合（RA・LLVM/clang＋RASC）＋移植skill | EK-RA6M5／EK-RA8M2 |
+| [asp3_stm32cube](https://github.com/toppers/asp3_stm32cube)（旧 stm32_vscode_asp） | STM32Cube HAL統合（STM32H5・CubeMX）＋移植skill。STM32MP257/A35ターゲットの移植元でもある | NUCLEO-H563ZI／H533RE |
+| [asp3_mcuxsdk](https://github.com/toppers/asp3_mcuxsdk) | NXP MCUXpresso SDK統合（i.MX RT685）。**Phase A・Phase B（SDK統合）とも完了・実機検証済**（`docs/dev/nxp-integration.md`） | EVK-MIMXRT685（Phase A：test_porting 6/6・testexec 33/35＝cpuexc1/4は arm_m 既知FAIL・dlynse較正・OS Awareness／Phase B：test_porting 6/6・testexec 33/36 PASS＝cpuexc1/4既知FAIL） |
+| [asp3_esp_idf_dev](https://github.com/exshonda/asp3_esp_idf_dev) | ESP-IDF統合（ESP32-C3／**ESP32-C6も対応開始**）。esp-hal-3rdparty方式＝FreeRTOS非依存のhal/soc層のみ使用。ESP32-C3：B-0/B-1（LL層コンソール・タイマ）・B-2（Wi-Fi os_adapter shim・scan＋WPA2接続）・C（lwIP・DHCP＋ping＋BSDソケット互換）完了，D（Bluetooth/NimBLE）は実施中（コントローラ起動まで実機成功，blob内部アサートで調査中）。ESP32-C6：submoduleを`feat/esp32c6`へ切替え，B-0/B-1（LL層コンソール・タイマ）完了（`docs/dev/esp-idf-integration.md`・`docs/hal-integration.md`） | ESP32-C3実機（B-1：test_porting 6/6・testexec 36/36／B-2：AP16-17個スキャン・STA_CONNECTED成立／C：DHCP取得・ゲートウェイping成功・BSDソケットTCP/UDP通信成功）／ESP32-C6実機（B-1：test_porting 6/6） |
 
 > asp3_core 側を変更したら、各リポジトリの submodule を bump して追従させること。

@@ -256,7 +256,7 @@ esptool書込み・`-DESP32C3_PORT=`でポート指定）も追加。
 
 ### Phase B-0／B-1（外側リポジトリ・esp-hal統合）結果（2026-07-03）
 
-外側リポジトリ **[asp3_esp_idf](https://github.com/exshonda/asp3_esp_idf)**
+外側リポジトリ **[asp3_esp_idf_dev](https://github.com/exshonda/asp3_esp_idf_dev)**
 （ローカル：`~/TOPPERS/ASP3CORE/asp3_esp_idf`）を作成し，
 esp-hal-3rdparty統合（B-1）まで完了。
 

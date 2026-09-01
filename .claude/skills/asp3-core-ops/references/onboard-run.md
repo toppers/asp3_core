@@ -85,10 +85,10 @@ intr    # 構成済み割込み（INTNO/pri/attr/ena/pend/handler）
 ## CI の確認（gh）
 
 ```bash
-gh run list --repo exshonda/asp3_core --branch main --limit 3
-RUN=$(gh run list --repo exshonda/asp3_core --branch main --limit 1 --json databaseId --jq '.[0].databaseId')
-gh run watch $RUN --repo exshonda/asp3_core --exit-status   # 完了まで待ち＋合否
-gh run view $RUN --repo exshonda/asp3_core --log-failed     # 失敗ログ
+gh run list --repo toppers/asp3_core --branch main --limit 3
+RUN=$(gh run list --repo toppers/asp3_core --branch main --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run watch $RUN --repo toppers/asp3_core --exit-status   # 完了まで待ち＋合否
+gh run view $RUN --repo toppers/asp3_core --log-failed     # 失敗ログ
 ```
 
 - `actions/checkout@v5`・`actions/upload-artifact@v7`（Node24．v5/v4は警告）。
