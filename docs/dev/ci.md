@@ -7,7 +7,7 @@ CI整備（AGENTS.md §1 機能追加計画、優先度：高）
 ## 内容
 
 GitHub Actions で**全ターゲットのビルド＋POSIX/QEMUでのテスト実行**を自動化する
-（リポジトリ：`github.com/exshonda/asp3_core`）。
+（リポジトリ：`github.com/toppers/asp3_core`）。
 
 ### 意義（何が嬉しいか）
 
@@ -63,7 +63,7 @@ GitHub Actions で**全ターゲットのビルド＋POSIX/QEMUでのテスト�
   （mps2-an505／mps2-an386／mps3-an547）で TTSP3 **functional 全件**（gate＝FAIL 0）
   ＋ **staticAPI**（non-gating＝ターゲット依存の cfg エラーコード差あり）を build+run
   〔2026-06-16 に単独 `ttsp3-mps2`〔an505のみ〕から an386/an547 を加えてマトリクス化〕。
-  詳細は `docs/dev/ttsp3-conformance.md`。要 `TTSP3_TOKEN` secret・ruby（ttg）。
+  詳細は `docs/dev/ttsp3-conformance.md`。TTSP3 は public のため認証不要、ruby（ttg）が要る。
 
 ### 設計方針
 
@@ -110,8 +110,8 @@ GitHub Actions で**全ターゲットのビルド＋POSIX/QEMUでのテスト�
 ### リスク・確認事項
 
 - **microchip-icicle-kit の QEMU 8.2 動作**（上記）— 計画段階での最大の不確定要素
-- GitHub Actions の無料枠（privateリポジトリの場合は分数消費に注意．
-  nightlyの頻度・対象で調整）
+- GitHub Actions の実行時間（publicリポジトリのため無料だが，
+  nightlyの頻度・対象は必要に応じて調整）
 - testexec.py はテスト毎に cmake configure を回すため、CI上の実行時間は
   ローカルより伸びる可能性（必要なら configure 共有等の高速化は別途）
 
@@ -250,7 +250,7 @@ zcu102／polarfire）、③build-onlyジョブ（pico2／stm32mp257）、
 
 devcontainer / Docker 項目（`devcontainer.md`）の一環として、ci.yml・
 nightly.yml の全ジョブを開発コンテナイメージ
-（`ghcr.io/exshonda/asp3_core-dev`・日付タグ参照）での実行に切り替えた。
+（`ghcr.io/toppers/asp3_core-dev`・日付タグ参照）での実行に切り替えた。
 
 - ランナーでの apt install／ARM tarball＋actions/cache の手順を削除し
   `container:` 参照に置換（ci.yml＋nightly.ymlで計124行→76行）

@@ -33,7 +33,7 @@ TOPPERS テストスイート **TTSP3** の API 適合性テスト（`api_test`�
 | `polarfire_soc_kit` | polarfire_soc_kit-qemu | RV64GC | riscv64-unknown-elf | qemu-system-riscv64 | `target/polarfire_soc_kit_gcc/ttsp3` |
 | **`polarfire_soc_kit_hw`** | **polarfire_soc_kit（実機 Discovery）** | **U54/RV64GC** | **riscv64-unknown-elf** | **SoftConsole openocd+gdb+実機** | `target/polarfire_soc_kit_gcc/ttsp3` |
 
-> ツールチェーン/QEMU が揃った環境（dev コンテナ `ghcr.io/exshonda/asp3_core-dev`）での実行を推奨。
+> ツールチェーン/QEMU が揃った環境（dev コンテナ `ghcr.io/toppers/asp3_core-dev`）での実行を推奨。
 > QEMU が無いアーキは `--build-only` で build 検証のみ可能。
 >
 > **実機ターゲット（`zybo_z7_hw`）**：QEMU の代わりに xsct(Vitis) で実機にロード＆実行し
@@ -186,8 +186,7 @@ python3 test/ttsp/run_ttsp.py --target <name> --build-only api_test/ASP
 
 `/.github/workflows/nightly.yml` の `ttsp3-mps2` ジョブが mps2-an505 で functional 全件を
 build+run する（gate＝`--only yaml` の FAIL 0、staticAPI は非gate）。
-TTSP3 が private の間は **secret `TTSP3_TOKEN`**（exshonda/TTSP3 read 権限 PAT）が必要。
-**TTSP3 が public 化したら** checkout の token 行と診断ステップを削除して認証不要にする。
+TTSP3（`toppers/TTSP3`）は public のため、checkout に認証は不要。
 
 ---
 
@@ -197,6 +196,5 @@ TTSP3 が private の間は **secret `TTSP3_TOKEN`**（exshonda/TTSP3 read 権�
 |---|---|
 | `'ttsp_target.cfg' not found` 等で build 失敗 | include パスが相対。**絶対パス**で渡す（ドライバは絶対化済。手動実行時は注意） |
 | `out.h` の関数が undeclared／別テストが混入 | リポジトリ直下に **stray `out.c`/`out.cfg`/`out.h`** が残存（cwd で `ttg.rb` を誤実行した等）。削除する |
-| `Input required and not supplied: token`（CI） | `TTSP3_TOKEN` secret が空/未登録。Repository(Actions) secret に登録（§6） |
 | 大量に SKIP | 仕様（HW 依存テスト）。`--only yaml` の FAIL が 0 なら functional 適合は成立 |
 | staticAPI error 系が FAIL | §4 既知の制約（ターゲット依存の cfg エラーコード差） |

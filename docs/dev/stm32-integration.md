@@ -1,8 +1,8 @@
 # STM32 HAL統合（STM32Cube / Cortex-M）
 
 > **注**：外側リポジトリは 2026-06-12 に `stm32_vscode_asp` →
-> `asp3_stm32cubemx` → **`asp3_stm32cube`** へ改名した
-> （https://github.com/exshonda/asp3_stm32cube ・命名規約 asp3_＋SDK名に統一。
+> `asp3_stm32cubemx` → **`asp3_stm32cube`** へ改名し、その後 TOPPERSプロジェクトへ
+> 移管した（https://github.com/toppers/asp3_stm32cube ・命名規約 asp3_＋SDK名に統一。
 > CubeMXはFSPにおけるRASC相当の生成ツールのためリポ名にしない）。
 > 同時に glue を `asp3_stm32cube.cmake`、H563ターゲットを
 > `target/stm32cubemx` → **`target/stm32h563_nucleo`**（H533の
@@ -32,7 +32,7 @@ stm32_vscode_asp/
 │   ├── tecsgen/                   ← ★TECS同梱
 │   ├── cfg/*.rb                   ← ★Ruby版cfg
 │   ├── syssvc/*.cdl               ← ★TECSセル
-│   └── asp3_stm32cubemx.cmake     ← STM32 glue
+│   └── asp3_stm32cube.cmake     ← STM32 glue
 ├── nucleo_h563zi/                 ← アプリ（STM32CubeMXプロジェクト）
 │   ├── H563ZI.ioc                 ← CubeMX設定
 │   ├── Core/ startup_stm32h563xx.s
@@ -139,7 +139,7 @@ A案（FSP/Pico と同型）：外側リポジトリ `stm32_vscode_asp` を **as
 ### Step 1〜2：移植実装
 
 - **submodule化**：bundled `asp3/`（606ファイル）の純カーネル部を削除し `asp3/asp3_core`
-  （submodule＝`https://github.com/exshonda/asp3_core.git`）へ。STM32固有部のみ残置。
+  （submodule＝`https://github.com/toppers/asp3_core.git`）へ。STM32固有部のみ残置。
 - **chip層 `asp3/arch/arm_m_gcc/stm32h5xx_stm32cube/`**：ヘッダ群は流用。`arch.cmake` のみ
   書換（`core_offset.trb`→`.py`、`ARCHDIR/CHIPDIR` 規約、`start.S` 非include＝CubeMX
   startup がリセットを握るため、存在しない `chip_serial.c` 参照を除去）。
@@ -151,7 +151,7 @@ A案（FSP/Pico と同型）：外側リポジトリ `stm32_vscode_asp` を **as
   - `target_check.trb`→`target_check.py`（`core_check.py` を include）。
   - `target.cmake`：FSP型（`ARCHDIR`=submodule、`CHIPDIR`=外側）。M33＋fpv5-sp-d16 フラグ。
     **`-Wl,--no-gc-sections` を追加**（下記理由）。
-- **glue `asp3/asp3_stm32cubemx.cmake`**：`asp3_fsp.cmake` 同型（`ASP3_CORE_DIR`/
+- **glue `asp3/asp3_stm32cube.cmake`**：`asp3_fsp.cmake` 同型（`ASP3_CORE_DIR`/
   `ASP3_ROOT_DIR`/`ASP3_TARGET_DIR`＋`asp3_set_stm32_options`）。
 - **アプリ `nucleo_h563zi/CMakeLists.txt`**：fork廃止→`ASP3_LIBRARY_ONLY`＋
   `add_subdirectory(asp3_core)`＋`asp3_add_syssvc`＋`ASP3_APPLDIR/APPLNAME`。
@@ -198,7 +198,7 @@ xvfb xdotool`）で **完全headless自動化**した：CubeMX 6.17 を仮想デ
 | `asp3/target/stm32cubemx/target_kernel.py`・`target_check.py` | 新規（.trb→.py） |
 | `asp3/target/stm32cubemx/{target_kernel,target_check}.trb` | 削除 |
 | `asp3/target/stm32cubemx/target.cmake` | 書換（FSP型・M33/fpv5-sp-d16・`-Wl,--no-gc-sections`） |
-| `asp3/asp3_stm32cubemx.cmake` | 書換（FSP glue 同型） |
+| `asp3/asp3_stm32cube.cmake` | 書換（FSP glue 同型） |
 | `nucleo_h563zi/CMakeLists.txt` | submodule＋LIBRARY_ONLY＋asp3_add_syssvc へ |
 | `nucleo_h563zi/{H563ZI.ioc,Core,Drivers,cmake,*.ld,CMakePresets.json}` | CubeMX 6.17＋FW_H5 V1.6.0 で再生成（`Drivers/cmake/*.ld` は `.gitignore` 済） |
 
@@ -250,7 +250,7 @@ asp3_core 本体：**無変更**（docs のみ：本ファイル・README索引�
 | `…/target_serial.h` | `INHNO/INTNO_USART` を `USART2_IRQn + 16` へ |
 | `…/target_serial.c` | `siopcb_table` の `USART3_IRQn`→`USART2_IRQn` |
 | `nucleo_h533re/Core/Src/main.c` | USER CODE 内に `#include "target_kernel.h"`／`sta_ker();` 追加（CubeMX再生成保持） |
-| `nucleo_h533re/CMakeLists.txt` | CubeMX素→ asp3_core submodule取込（`ASP3_TARGET stm32h533_nucleo`・`include(../asp3/asp3_stm32cubemx.cmake)`・`ASP3_LIBRARY_ONLY`・`asp3_add_syssvc`） |
+| `nucleo_h533re/CMakeLists.txt` | CubeMX素→ asp3_core submodule取込（`ASP3_TARGET stm32h533_nucleo`・`include(../asp3/asp3_stm32cube.cmake)`・`ASP3_LIBRARY_ONLY`・`asp3_add_syssvc`） |
 | `nucleo_h533re/{H533.ioc,Core,Drivers,cmake,.vscode,*.ld}` | CubeMX生成（H533RE用 BSP＝USART2／TIM2／TIM5）。**フォルダ構成は H563ZI と同等にフラット化**（旧 `nucleo_h533re/H533/` ネスト＋残骸 `H533RE/`・IAR用 `EWARM/` は削除） |
 
 asp3_core 本体：**無変更**（docs のみ：本ファイル）。

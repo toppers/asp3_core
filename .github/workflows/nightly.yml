@@ -19,8 +19,8 @@
 #
 #  TTSP3 適合性テスト（ttsp3-mps2 ジョブ）：TOPPERSテストスイート TTSP3 の
 #  functional 全件を mps2-an505（Cortex-M33）build+run で回す（設計は
-#  docs/dev/ttsp3-conformance.md）．TTSP3 は private 別リポジトリのため
-#  checkout に **secret `TTSP3_TOKEN`**（exshonda/TTSP3 read 権限の PAT）が要る．
+#  docs/dev/ttsp3-conformance.md）．TTSP3 は別リポジトリ（toppers/TTSP3・public）
+#  のため checkout で取得する（tokenは不要）．
 #  ttg が Ruby 依存のため apt で ruby を都度導入する（イメージ非同梱）．
 #
 name: Nightly
@@ -38,7 +38,7 @@ jobs:
     name: testexec full (${{ matrix.name }})
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
       #  ランナーファイルに書けるようrootで実行する
       options: --user root
@@ -106,8 +106,7 @@ jobs:
   #  TTSP3 適合性テスト：M-profile 3ターゲット（mps2-an505=M33／mps2-an386=M4/v7-M／
   #  mps3-an547=M55/v8.1-M+MVE）で functional 全件 build+run（matrix・fail-fast=false）
   #
-  #  - TTSP3（private 別リポジトリ・読み取り専用のテスト供給源）を checkout．
-  #    要 secret TTSP3_TOKEN（exshonda/TTSP3 への read 権限 PAT）．
+  #  - TTSP3（別リポジトリ toppers/TTSP3・読み取り専用のテスト供給源）を checkout．
   #  - ttg（Ruby）でテスト生成するため ruby を apt 導入（イメージ非同梱）．
   #  - **gate＝functional（--only yaml）の FAIL 0**（HW依存は driver が SKIP）．
   #    staticAPI のエラー系はターゲット依存の cfg エラーコード差があり
@@ -125,28 +124,18 @@ jobs:
           - { target: mps2_an386, label: "mps2-an386 (Cortex-M4/v7-M)" }
           - { target: mps3_an547, label: "mps3-an547 (Cortex-M55/v8.1-M+MVE)" }
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       options: --user root
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5
-      - name: Verify TTSP3_TOKEN secret is present
-        env:
-          TOK: ${{ secrets.TTSP3_TOKEN }}
-        run: |
-          if [ -z "$TOK" ]; then
-            echo "::error::secret TTSP3_TOKEN が空/未検出です。exshonda/asp3_core の Settings → Secrets and variables → Actions の Repository secrets に、名前を厳密に TTSP3_TOKEN として、exshonda/TTSP3 を読める PAT を登録してください。"
-            exit 1
-          fi
-          echo "TTSP3_TOKEN present (length ${#TOK})."
-      - name: Checkout TTSP3 (private, read-only test source)
+      - name: Checkout TTSP3 (read-only test source)
         uses: actions/checkout@v5
         with:
-          repository: exshonda/TTSP3
+          repository: toppers/TTSP3
           ref: main
-          token: ${{ secrets.TTSP3_TOKEN }}
           path: TTSP3
       - name: Install ruby (ttg)
         run: |

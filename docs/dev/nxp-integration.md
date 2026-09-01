@@ -52,7 +52,7 @@ NXP MCUXpresso SDK と TOPPERS/ASP3 を協調動作させる。対象は
 
 ### Phase B：MCUXpresso SDK統合（外側リポジトリ）
 0. リポジトリ名：**`asp3_mcuxsdk`** に決定（NXP公式SDKリポジトリ名 mcuxsdk に一致）。
-   **作成済み（2026-06-12）**：https://github.com/exshonda/asp3_mcuxsdk
+   **作成済み（2026-06-12）**：https://github.com/toppers/asp3_mcuxsdk
    ＝骨格（README・asp3_core submodule・予定構成）を初期化済み。
    ローカル：`../asp3_mcuxsdk`
 1. 外側リポジトリ：asp3_core submodule＋
@@ -309,7 +309,7 @@ asp3_mcuxsdk の残課題を消し込んだ（コミットは asp3_mcuxsdk リ�
 | **CI（GitHub Actions）** | `.github/workflows/ci.yml` を新設．asp3_core と同じ開発コンテナで `submodules:recursive`→`cmake --preset Debug` の build-only（テストは実機要）。**初回CI成功（47秒）**。SDK が submodule 直参照＝GUI生成不要ゆえCIビルド可（CubeMX/RASC と違う利点） | `544a63b` |
 | **移植skill** | `.claude/skills/porting-asp3-to-nxp`（SKILL.md＋reference 3本〔boot-vector-pitfalls・sdk-acquisition・flash-debug-tools〕＋checklists 2本＋snippet）．asp3_stm32cube の porting-asp3-to-stm32 と同構成 | `2966fcd` |
 
-> CIで共有コンテナ `ghcr.io/exshonda/asp3_core-dev` を使うには、GHCRパッケージの
+> CIで共有コンテナ `ghcr.io/toppers/asp3_core-dev` を使うには、GHCRパッケージの
 > Actions access に asp3_mcuxsdk を追加する必要があった（新規リポジトリは既定で
 > pull 不可＝「Initialize containers」で docker pull 失敗）。権限付与後に成功。
 

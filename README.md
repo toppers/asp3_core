@@ -1,6 +1,6 @@
 # TOPPERS/ASP3 Core
 
-[![CI](https://github.com/exshonda/asp3_core/actions/workflows/ci.yml/badge.svg)](https://github.com/exshonda/asp3_core/actions/workflows/ci.yml)
+[![CI](https://github.com/toppers/asp3_core/actions/workflows/ci.yml/badge.svg)](https://github.com/toppers/asp3_core/actions/workflows/ci.yml)
 
 A bare-metal RTOS kernel based on TOPPERS/ASP3, restructured for AI-driven development.
 
@@ -36,7 +36,7 @@ cmake --preset mps2_an505-qemu && cmake --build --preset run-mps2_an505-qemu
 ### 開発環境（Docker / devcontainer）
 
 ツールチェーン・QEMU・Pythonをピン留めした開発コンテナ
-（`ghcr.io/exshonda/asp3_core-dev`）を用意しています。
+（`ghcr.io/toppers/asp3_core-dev`）を用意しています。
 **CIも同一イメージで実行**するため、コンテナ内で通ればCIでも通ります。
 
 - VS Code / Claude Code：リポジトリを開いて「Reopen in Container」（[.devcontainer/](.devcontainer/)）
@@ -78,4 +78,4 @@ AIコーディングツール（Claude Code / Cline / Cursor等）で開発す�
 - ベース：TOPPERS/ASP3 Release 3.7.2（`UPSTREAM_VERSION` 参照）
 - 本リポジトリは上流の**改変版**です。乖離は [DIVERGENCE_MAP.md](DIVERGENCE_MAP.md) で管理し、
   発見した上流の不具合は報告しています（例：[docs/dev/upstream-report-tracelog.md](docs/dev/upstream-report-tracelog.md)）
-- ライセンス：[TOPPERSライセンス](https://www.toppers.jp/license.html)
+- ライセンス：[TOPPERSライセンス](https://www.toppers.jp/license.html)（本文は [LICENSE](LICENSE)）

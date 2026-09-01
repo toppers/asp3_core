@@ -5,7 +5,7 @@
 #  - PR/push：全ターゲットbuild＋各QEMUスモーク（10分以内目標）
 #  - 全件テストは nightly.yml（schedule＋手動dispatch）
 #  - 合否判定スクリプトは scripts/ci/（ローカルでも実行可能）
-#  - 全ジョブを開発コンテナイメージ（ghcr.io/exshonda/asp3_core-dev）で実行
+#  - 全ジョブを開発コンテナイメージ（ghcr.io/toppers/asp3_core-dev）で実行
 #    （ツールチェーン・QEMUのピン留め．設計は docs/dev/devcontainer.md）．
 #    イメージは日付タグで参照する（暗黙の更新を防ぐ）．更新時は本ファイル内の
 #    タグを一括置換すること
@@ -49,7 +49,7 @@ jobs:
     name: POSIX (linux)
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
       #  ランナーファイルに書けるようrootで実行する
       options: --user root
@@ -97,7 +97,7 @@ jobs:
     name: QEMU mps2-an505 (Cortex-M33)
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
       #  ランナーファイルに書けるようrootで実行する
       options: --user root
@@ -133,7 +133,7 @@ jobs:
     name: QEMU mps2-an386 (Cortex-M4)
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
       #  ランナーファイルに書けるようrootで実行する
       options: --user root
@@ -171,7 +171,7 @@ jobs:
     name: QEMU mps3-an547 (Cortex-M55)
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       options: --user root
       credentials:
         username: ${{ github.actor }}
@@ -204,7 +204,7 @@ jobs:
     name: QEMU zybo_z7 (Cortex-A9)
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
       #  ランナーファイルに書けるようrootで実行する
       options: --user root
@@ -233,7 +233,7 @@ jobs:
     name: QEMU zcu102 (Cortex-A53)
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
       #  ランナーファイルに書けるようrootで実行する
       options: --user root
@@ -278,7 +278,7 @@ jobs:
     name: QEMU polarfire (RV64GC)
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
       #  ランナーファイルに書けるようrootで実行する
       options: --user root
@@ -316,7 +316,7 @@ jobs:
     name: Build pico2_arm (Cortex-M33)
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
       #  ランナーファイルに書けるようrootで実行する
       options: --user root
@@ -339,7 +339,7 @@ jobs:
     name: Build mimxrt685evk (Cortex-M33)
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
       #  ランナーファイルに書けるようrootで実行する
       options: --user root
@@ -362,7 +362,7 @@ jobs:
     name: Build pico2_riscv (RISC-V Hazard3)
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
       #  ランナーファイルに書けるようrootで実行する
       options: --user root
@@ -385,7 +385,7 @@ jobs:
     name: Build stm32mp257f_dk (Cortex-A35)
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
       #  ランナーファイルに書けるようrootで実行する
       options: --user root
@@ -407,7 +407,7 @@ jobs:
     name: Static analysis (cppcheck / clang-tidy)
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/exshonda/asp3_core-dev:20260606
+      image: ghcr.io/toppers/asp3_core-dev:20260606
       #  イメージの既定ユーザはvscode（devcontainer用）のため、Actionsの
       #  ランナーファイルに書けるようrootで実行する
       options: --user root

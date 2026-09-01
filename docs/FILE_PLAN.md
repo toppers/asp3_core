@@ -61,7 +61,7 @@ asp3_fsp/ ・ asp3_stm32cube/  ← 同様
 ```bash
 # 例：asp3_pico_sdkを移行後
 cd asp3_pico_sdk
-git submodule add https://github.com/exshonda/asp3_core asp3_core
+git submodule add https://github.com/toppers/asp3_core asp3_core
 git submodule update --init
 ```
 

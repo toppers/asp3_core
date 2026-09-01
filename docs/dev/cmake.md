@@ -12,11 +12,11 @@ CMakeビルドシステムを導入し、`cmake --preset` による閉ループ�
 
 ### ベース実装
 
-- **[asp3_fsp](https://github.com/exshonda/asp3_fsp)**：`asp3_fsp.cmake`（エントリ：
+- **[asp3_fsp](https://github.com/toppers/asp3_fsp)**：`asp3_fsp.cmake`（エントリ：
   `ASP3_ROOT_DIR`・`ASP3_TARGET`）＋ `CMakeLists.txt`（284行。cfg.py 3パスの
   custom_command パイプライン・`libasp3.a`・pass3チェック関数 `asp3_cfg_check`）＋
   `target/<name>/target.cmake`（変数積み上げ＋`arch.cmake` include）
-- **[asp3_pico_sdk](https://github.com/exshonda/asp3_pico_sdk)**：同系構成で
+- **[asp3_pico_sdk](https://github.com/toppers/asp3_pico_sdk)**：同系構成で
   pico-sdk 統合（`PICO_PLATFORM` 連動・`asp3_set_pico_sdk_options`）
 - 両者とも Python版cfg・`.py` テンプレート前提であり、本リポジトリの
   cfgのPython化（完了）とそのまま接続できる
