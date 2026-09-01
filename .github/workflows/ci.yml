@@ -331,6 +331,13 @@ jobs:
       QEMU_ESP: /opt/qemu-esp/bin/qemu-system-riscv32
     steps:
       - uses: actions/checkout@v5
+      #  Espressif版QEMUはSDL2にリンクされており（-nographicでも解決が要る），
+      #  開発コンテナイメージには同梱していないためここで導入する．
+      - name: Install libSDL2 (Espressif QEMU runtime dep)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends libsdl2-2.0-0
+          rm -rf /var/lib/apt/lists/*
       - name: Install Espressif QEMU (esp32c3)
         run: |
           curl -fsSL -o /tmp/qemu-esp.tar.xz \
