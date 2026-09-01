@@ -42,7 +42,7 @@ cfgは2層に分けて扱う（[`cfg-spec-map.md`](cfg-spec-map.md)＝CFG_SPEC_M
 
 ### ベース実装（asp3_fsp）
 
-**[asp3_fsp](https://github.com/exshonda/asp3_fsp) の実装済みPython版cfgをベースとする。**
+**[asp3_fsp](https://github.com/toppers/asp3_fsp) の実装済みPython版cfgをベースとする。**
 
 - Python版エンジン：`asp3_fsp/main` の `asp3/cfg/`
   （`cfg.py`・`pass1.py`・`pass2.py`・`gen_file.py`・`srecord.py`、計約2,626行。**cfg 1.7.0ベース**）

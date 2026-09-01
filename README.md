@@ -1,6 +1,6 @@
 # TOPPERS/ASP3 Core
 
-[![CI](https://github.com/exshonda/asp3_core/actions/workflows/ci.yml/badge.svg)](https://github.com/exshonda/asp3_core/actions/workflows/ci.yml)
+[![CI](https://github.com/toppers/asp3_core/actions/workflows/ci.yml/badge.svg)](https://github.com/toppers/asp3_core/actions/workflows/ci.yml)
 
 A bare-metal RTOS kernel based on TOPPERS/ASP3, restructured for AI-driven development.
 
@@ -36,7 +36,7 @@ cmake --preset mps2_an505-qemu && cmake --build --preset run-mps2_an505-qemu
 ### 開発環境（Docker / devcontainer）
 
 ツールチェーン・QEMU・Pythonをピン留めした開発コンテナ
-（`ghcr.io/exshonda/asp3_core-dev`）を用意しています。
+（`ghcr.io/toppers/asp3_core-dev`）を用意しています。
 **CIも同一イメージで実行**するため、コンテナ内で通ればCIでも通ります。
 
 - VS Code / Claude Code：リポジトリを開いて「Reopen in Container」（[.devcontainer/](.devcontainer/)）

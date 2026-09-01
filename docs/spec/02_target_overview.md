@@ -62,8 +62,8 @@ target/dummy_gcc    ダミー（GNU開発環境）のターゲット依存部
 まずはこれをターゲットシステム向けの開発環境でビルドし，その後，各ファイルの内容をターゲットシステム向けに修正していくことを想定している。
 
 > **asp3_core注**: asp3_coreでは，tarball配布ではなく **GitHubリポジトリ** として一元管理されています。
-> - リポジトリ: https://github.com/exshonda/asp3_core
-> - クローン: `git clone --recursive https://github.com/exshonda/asp3_core.git`
+> - リポジトリ: https://github.com/toppers/asp3_core
+> - クローン: `git clone --recursive https://github.com/toppers/asp3_core.git`
 > - サブプロジェクト（SDK依存部）: `asp3_pico_sdk`, `asp3_fsp` 等は `external/` 配下で管理
 > 
 > 新規ターゲット追加時の出発点は `target/dummy_gcc` ではなく，既存の機能的に類似したターゲット（例：ARM Cortex-M なら `target/pico2_arm_gcc/`）をテンプレートとして使用してください。

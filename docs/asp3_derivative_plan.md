@@ -57,9 +57,9 @@
 
 | リポジトリ | 対象SDK/環境 |
 |---|---|
-| [asp3_pico_sdk](https://github.com/exshonda/asp3_pico_sdk) | Raspberry Pi Pico SDK（RP2350） |
-| [asp3_fsp](https://github.com/exshonda/asp3_fsp) | Renesas FSP |
-| [asp3_stm32cube](https://github.com/exshonda/asp3_stm32cube) | STM32 + CubeMX HAL |
+| [asp3_pico_sdk](https://github.com/toppers/asp3_pico_sdk) | Raspberry Pi Pico SDK（RP2350） |
+| [asp3_fsp](https://github.com/toppers/asp3_fsp) | Renesas FSP |
+| [asp3_stm32cube](https://github.com/toppers/asp3_stm32cube) | STM32 + CubeMX HAL |
 
 ---
 
@@ -641,7 +641,7 @@ python3 scripts/check_events.py expected/sample1.json actual.json
 ## 10. 参考リンク
 
 - [TOPPERS/ASP3公式](https://www.toppers.jp/asp3-kernel.html)
-- [asp3_pico_sdk](https://github.com/exshonda/asp3_pico_sdk)
-- [asp3_fsp](https://github.com/exshonda/asp3_fsp)
-- [asp3_stm32cube](https://github.com/exshonda/asp3_stm32cube)
+- [asp3_pico_sdk](https://github.com/toppers/asp3_pico_sdk)
+- [asp3_fsp](https://github.com/toppers/asp3_fsp)
+- [asp3_stm32cube](https://github.com/toppers/asp3_stm32cube)
 - [QEMU mps2/mps3ドキュメント](https://www.qemu.org/docs/master/system/arm/mps2.html)

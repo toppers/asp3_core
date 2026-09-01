@@ -24,7 +24,7 @@ Raspberry Pi Pico SDK と TOPPERS/ASP3 を**協調動作**させる。これま�
 
 ### 移植元（実証済みの仕組み・確認済み）
 
-`github.com/exshonda/asp3_pico_sdk`：`asp3_pico_sdk.cmake`（`PICO_PLATFORM`→
+`github.com/toppers/asp3_pico_sdk`：`asp3_pico_sdk.cmake`（`PICO_PLATFORM`→
 `ASP3_TARGET` 解決・`asp3_set_pico_sdk_options()`）＋ `target/rp2350-arm-s_pico_sdk/`。
 共存の要は **pico-sdkの割込み登録API（`irq_set_exclusive_handler`等8関数）を
 リンカ `--wrap` でASP3管理へ誘導**＋ `PICO_RUNTIME_SKIP_INIT_*` でSDKの
