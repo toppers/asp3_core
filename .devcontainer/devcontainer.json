@@ -5,10 +5,9 @@
 	// Dockerfile変更時は .github/workflows/container.yml が新しい日付タグを
 	// push するので、ここのタグも合わせて更新すること。
 	//
-	// privateリポジトリのGHCRイメージをpullするには事前にdocker loginが必要：
-	//   gh auth token | docker login ghcr.io -u <github-user> --password-stdin
+	// GHCRイメージはpublic。認証なしでpullできる。
 	"name": "TOPPERS/ASP3 Core",
-	"image": "ghcr.io/exshonda/asp3_core-dev:20260606",
+	"image": "ghcr.io/toppers/asp3_core-dev:20260606",
 	"remoteUser": "vscode",
 	"customizations": {
 		"vscode": {

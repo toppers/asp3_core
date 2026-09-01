@@ -260,8 +260,8 @@ python3 test/ttsp/run_ttsp.py --target zcu102_arm64    --tap api_test/ASP   # �
   生成後の人間確認が必要なため別タスク。
 - **CI 組み込み**：nightly に **mps2 build+run の functional 全件**ジョブ（`ttsp3-mps2`）を追加済み
   （`.github/workflows/nightly.yml`）。gate は `--only yaml` の FAIL 0（HW依存は SKIP）、staticAPI
-  エラー系はターゲット依存差のため非gate（continue-on-error）で可視化。TTSP3 は private 別リポジトリの
-  ため checkout に **secret `TTSP3_TOKEN`**（exshonda/TTSP3 への read 権限 PAT）が必要、ttg 用に ruby を
+  エラー系はターゲット依存差のため非gate（continue-on-error）で可視化。TTSP3 は別リポジトリ
+  （`toppers/TTSP3`・public）を checkout して供給する（認証不要）、ttg 用に ruby を
   apt 都度導入する（dev コンテナ非同梱）。polarfire build-only・zcu102 の CI 化は後続。
 
 ## スコープ外 / リスク

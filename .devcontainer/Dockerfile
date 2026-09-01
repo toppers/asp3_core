@@ -15,7 +15,7 @@
 #    Python 3.14 / QEMU 10.2.1 / cppcheck 2.19
 #  ※ apt パッケージは `=version` でピンしない（Ubuntuアーカイブは旧版を
 #    保持しないため再ビルドが壊れる）．バージョン固定はイメージの日付タグ
-#    （ghcr.io/exshonda/asp3_core-dev:YYYYMMDD）で担保する．
+#    （ghcr.io/toppers/asp3_core-dev:YYYYMMDD）で担保する．
 #
 FROM ubuntu:26.04
 
